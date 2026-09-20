@@ -6,6 +6,18 @@ import type {
   SlackUserInfoResponse,
 } from "@/models/slack-api";
 
+class SlackApiError extends Error {
+  constructor(
+    readonly method: string,
+    readonly slackError: string,
+    readonly needed?: string,
+    readonly provided?: string,
+  ) {
+    super(`${method} failed: ${slackError}`);
+    this.name = "SlackApiError";
+  }
+}
+
 function getBotToken() {
   const token = process.env.SLACK_BOT_TOKEN;
 
@@ -31,7 +43,12 @@ async function callSlack<T extends SlackApiResponse>(
   const result = (await response.json()) as T;
 
   if (!response.ok || !result.ok) {
-    throw new Error(result.error ?? `${method} failed`);
+    throw new SlackApiError(
+      method,
+      result.error ?? `HTTP ${response.status}`,
+      result.needed,
+      result.provided,
+    );
   }
 
   return result;
@@ -50,6 +67,7 @@ export async function postSlackMessage(
 
 export async function getSlackMember(
   userId: string | undefined,
+  source: string,
 ): Promise<SlackMember | null> {
   if (!userId) {
     return null;
@@ -59,17 +77,40 @@ export async function getSlackMember(
     const result = await callSlack<SlackUserInfoResponse>("users.info", {
       user: userId,
     });
+    const name =
+      result.user?.profile?.display_name ||
+      result.user?.profile?.real_name ||
+      result.user?.real_name ||
+      result.user?.name;
+
+    if (!name) {
+      return null;
+    }
 
     return {
       id: result.user?.id ?? userId,
-      name:
-        result.user?.profile?.display_name ||
-        result.user?.profile?.real_name ||
-        result.user?.real_name ||
-        result.user?.name ||
-        userId,
+      name,
     };
-  } catch {
-    return { id: userId, name: userId };
+  } catch (error) {
+    if (error instanceof SlackApiError && error.slackError === "user_not_found") {
+      return null;
+    }
+
+    if (error instanceof SlackApiError) {
+      console.error("Unable to fetch Slack member", {
+        source,
+        method: error.method,
+        error: error.slackError,
+        needed: error.needed,
+        provided: error.provided,
+      });
+    } else {
+      console.error("Unable to fetch Slack member", {
+        source,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+
+    return null;
   }
 }

@@ -1,9 +1,9 @@
-import type { SlackChannelContext, SlackModal } from "@/models/slack-api";
+import type { SlackModal, SlackModalMetadata } from "@/models/slack-api";
 import { openSlackModal } from "@/libs/utils/client";
 import { parseSlackCommand } from "@/libs/utils/requests";
 
 type ModalFactory = (
-  context: SlackChannelContext,
+  metadata: SlackModalMetadata,
 ) => SlackModal | Promise<SlackModal>;
 
 export async function handleSlackCommand(
@@ -17,7 +17,7 @@ export async function handleSlackCommand(
   }
 
   try {
-    const modal = await createModal(command.context);
+    const modal = await createModal(command.metadata);
     await openSlackModal(command.triggerId, modal);
     return new Response(null, { status: 200 });
   } catch (error) {

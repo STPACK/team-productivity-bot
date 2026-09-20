@@ -5,7 +5,13 @@ export type SlackChannelContext = {
 
 export type SlackCommand = {
   triggerId: string;
-  context: SlackChannelContext;
+  metadata: SlackModalMetadata;
+};
+
+export type SlackModalMetadata = {
+  channel: SlackChannelContext;
+  requesterUserId: string | null;
+  requesterUserName: string | null;
 };
 
 export type SlackModal = Record<string, unknown>;
@@ -23,6 +29,8 @@ export type SlackInteractionPayload = {
   type: string;
   user?: {
     id?: string;
+    name?: string;
+    username?: string;
   };
   view?: {
     callback_id?: string;

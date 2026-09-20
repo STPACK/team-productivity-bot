@@ -56,18 +56,21 @@ export async function saveDailySubmission(submission: DailySubmission) {
   const channel = getChannelDocument(channelId);
   const record = channel.collection("dailySubmissions").doc(submission.date);
   const batch = getDatabase().batch();
+  const recordData = {
+    userId: submission.userId ?? null,
+    userName: submission.userName ?? null,
+    startTime: submission.startTime,
+    endTime: submission.endTime,
+    durationMinutes: submission.durationMinutes,
+    date: submission.date,
+    timezone: submission.timezone,
+  };
 
   batch.set(channel, channelData(submission.channel), { merge: true });
   batch.set(
     record,
     {
-      userId: submission.userId ?? null,
-      userName: submission.userName ?? null,
-      startTime: submission.startTime,
-      endTime: submission.endTime,
-      durationMinutes: submission.durationMinutes,
-      date: submission.date,
-      timezone: submission.timezone,
+      ...recordData,
       submittedAt: FieldValue.serverTimestamp(),
     },
     { merge: true },
@@ -86,9 +89,7 @@ export async function saveIssueSubmission(submission: IssueSubmission) {
   const channel = getChannelDocument(channelId);
   const record = channel.collection("issueSubmissions").doc();
   const batch = getDatabase().batch();
-
-  batch.set(channel, channelData(submission.channel), { merge: true });
-  batch.set(record, {
+  const recordData = {
     userId: submission.userId ?? null,
     userName: submission.userName ?? null,
     problem: submission.problem ?? null,
@@ -98,6 +99,11 @@ export async function saveIssueSubmission(submission: IssueSubmission) {
     need: submission.need ?? null,
     minutes: submission.minutes,
     note: submission.note ?? null,
+  };
+
+  batch.set(channel, channelData(submission.channel), { merge: true });
+  batch.set(record, {
+    ...recordData,
     createdAt: FieldValue.serverTimestamp(),
   });
 

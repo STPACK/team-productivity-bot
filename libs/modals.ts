@@ -1,14 +1,14 @@
 import type {
   DailyTimeRange,
-  SlackChannelContext,
   SlackModal,
+  SlackModalMetadata,
 } from "@/models/slack-api";
 
-export function createIssueModal(context: SlackChannelContext): SlackModal {
+export function createIssueModal(metadata: SlackModalMetadata): SlackModal {
   return {
     type: "modal",
     callback_id: "issue_create",
-    private_metadata: JSON.stringify(context),
+    private_metadata: JSON.stringify(metadata),
     title: { type: "plain_text", text: "Create Issue Log" },
     submit: { type: "plain_text", text: "ส่ง" },
     close: { type: "plain_text", text: "ยกเลิก" },
@@ -86,13 +86,13 @@ export function createIssueModal(context: SlackChannelContext): SlackModal {
 }
 
 export function createDailyModal(
-  context: SlackChannelContext,
+  metadata: SlackModalMetadata,
   timeRange: DailyTimeRange,
 ): SlackModal {
   return {
     type: "modal",
     callback_id: "daily_create",
-    private_metadata: JSON.stringify(context),
+    private_metadata: JSON.stringify(metadata),
     title: { type: "plain_text", text: "Daily Meeting Time" },
     submit: { type: "plain_text", text: "ส่ง" },
     close: { type: "plain_text", text: "ยกเลิก" },

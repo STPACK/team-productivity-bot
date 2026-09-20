@@ -4,6 +4,7 @@ import type {
   SlackCommand,
   SlackInputValue,
   SlackInteractionPayload,
+  SlackModalMetadata,
 } from "@/models/slack-api";
 
 export function parseSlackCommand(formData: FormData): SlackCommand | null {
@@ -15,12 +16,20 @@ export function parseSlackCommand(formData: FormData): SlackCommand | null {
 
   const channelId = formData.get("channel_id");
   const channelName = formData.get("channel_name");
+  const requesterUserId = formData.get("user_id");
+  const requesterUserName = formData.get("user_name");
 
   return {
     triggerId,
-    context: {
-      channelId: typeof channelId === "string" ? channelId : null,
-      channelName: typeof channelName === "string" ? channelName : null,
+    metadata: {
+      channel: {
+        channelId: typeof channelId === "string" ? channelId : null,
+        channelName: typeof channelName === "string" ? channelName : null,
+      },
+      requesterUserId:
+        typeof requesterUserId === "string" ? requesterUserId : null,
+      requesterUserName:
+        typeof requesterUserName === "string" ? requesterUserName : null,
     },
   };
 }
@@ -81,9 +90,10 @@ export function getChannelContext(
   payload: SlackInteractionPayload,
 ): SlackChannelContext {
   try {
-    const context = JSON.parse(payload.view?.private_metadata ?? "{}") as Partial<
-      SlackChannelContext
-    >;
+    const metadata = JSON.parse(
+      payload.view?.private_metadata ?? "{}",
+    ) as Partial<SlackModalMetadata & SlackChannelContext>;
+    const context = metadata.channel ?? metadata;
 
     return {
       channelId:
@@ -93,6 +103,34 @@ export function getChannelContext(
     };
   } catch {
     return { channelId: null, channelName: null };
+  }
+}
+
+export function getRequesterUserId(payload: SlackInteractionPayload) {
+  try {
+    const metadata = JSON.parse(
+      payload.view?.private_metadata ?? "{}",
+    ) as Partial<SlackModalMetadata>;
+
+    return typeof metadata.requesterUserId === "string"
+      ? metadata.requesterUserId
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+export function getRequesterUserName(payload: SlackInteractionPayload) {
+  try {
+    const metadata = JSON.parse(
+      payload.view?.private_metadata ?? "{}",
+    ) as Partial<SlackModalMetadata>;
+
+    return typeof metadata.requesterUserName === "string"
+      ? metadata.requesterUserName
+      : null;
+  } catch {
+    return null;
   }
 }
 
