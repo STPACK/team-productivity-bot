@@ -5,7 +5,7 @@ export function createIssueModal(context: SlackChannelContext): SlackModal {
     type: "modal",
     callback_id: "issue_create",
     private_metadata: JSON.stringify(context),
-    title: { type: "plain_text", text: "ขอความช่วยเหลือ" },
+    title: { type: "plain_text", text: "Create Issue Log" },
     submit: { type: "plain_text", text: "ส่ง" },
     close: { type: "plain_text", text: "ยกเลิก" },
     blocks: [
