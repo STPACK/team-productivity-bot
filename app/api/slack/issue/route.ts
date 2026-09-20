@@ -32,7 +32,7 @@ export async function POST(request: Request) {
             block_id: "problem",
             label: {
               type: "plain_text",
-              text: "Topic: Problem",
+              text: "Problem",
             },
             element: {
               type: "plain_text_input",
@@ -48,7 +48,7 @@ export async function POST(request: Request) {
             block_id: "blocking",
             label: {
               type: "plain_text",
-              text: "Topic: Blocking",
+              text: "Blocking",
             },
             element: {
               type: "plain_text_input",
@@ -65,7 +65,7 @@ export async function POST(request: Request) {
             block_id: "ask",
             label: {
               type: "plain_text",
-              text: "Topic: Ask",
+              text: "Ask",
             },
             element: {
               type: "users_select",
@@ -81,7 +81,7 @@ export async function POST(request: Request) {
             block_id: "need",
             label: {
               type: "plain_text",
-              text: "Topic: Need",
+              text: "Need",
             },
             element: {
               type: "plain_text_input",
@@ -98,11 +98,13 @@ export async function POST(request: Request) {
             block_id: "time",
             label: {
               type: "plain_text",
-              text: "Topic: Time",
+              text: "Time",
             },
             element: {
-              type: "plain_text_input",
+              type: "number_input",
               action_id: "time_input",
+              is_decimal_allowed: false,
+              min_value: "1",
               placeholder: {
                 type: "plain_text",
                 text: "คุยกี่นาที",
