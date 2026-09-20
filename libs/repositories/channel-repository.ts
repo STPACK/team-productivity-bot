@@ -2,6 +2,7 @@ import "server-only";
 
 import { FieldValue } from "firebase-admin/firestore";
 import { getDatabase } from "@/libs/firebase/admin";
+import { createIssueRecordData } from "@/libs/repositories/channel-records";
 import type {
   DailySubmission,
   DailyTimeRange,
@@ -89,17 +90,7 @@ export async function saveIssueSubmission(submission: IssueSubmission) {
   const channel = getChannelDocument(channelId);
   const record = channel.collection("issueSubmissions").doc();
   const batch = getDatabase().batch();
-  const recordData = {
-    userId: submission.userId ?? null,
-    userName: submission.userName ?? null,
-    problem: submission.problem ?? null,
-    blocking: submission.blocking ?? null,
-    askUserIds: submission.askUserIds,
-    askUserNames: submission.askUserNames ?? [],
-    need: submission.need ?? null,
-    minutes: submission.minutes,
-    note: submission.note ?? null,
-  };
+  const recordData = createIssueRecordData(submission);
 
   batch.set(channel, channelData(submission.channel), { merge: true });
   batch.set(record, {

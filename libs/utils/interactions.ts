@@ -71,8 +71,8 @@ async function publishIssue(submission: IssueSubmission) {
       submittedBy?.name,
       submission.userName,
     ),
-    askUserNames: askedMembers.flatMap((member) =>
-      member ? [member.name] : [],
+    askUserNames: askedMembers.map(
+      (member, index) => member?.name ?? submission.askUserIds[index],
     ),
   };
 
@@ -155,6 +155,7 @@ function handleIssueSubmission(payload: SlackInteractionPayload) {
   }
 
   const identity = getSubmissionIdentity(payload);
+  const { date: createdDate, timezone } = getCalendarDate(undefined);
   const submission: IssueSubmission = {
     channel: getChannelContext(payload),
     ...identity,
@@ -165,6 +166,8 @@ function handleIssueSubmission(payload: SlackInteractionPayload) {
     need: getInput(payload, "need", "need_input")?.value,
     minutes,
     note: getInput(payload, "note", "note_input")?.value,
+    createdDate,
+    timezone,
   };
 
   runAfterResponse(() => publishIssue(submission));

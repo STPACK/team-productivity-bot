@@ -73,6 +73,8 @@ export type IssueSubmission = {
   need?: string;
   minutes: number;
   note?: string;
+  createdDate: string;
+  timezone: string;
 };
 
 export type SlackApiResponse = {

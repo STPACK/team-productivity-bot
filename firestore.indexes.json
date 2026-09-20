@@ -1,0 +1,71 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "issueSubmissions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "createdBy.userId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "issueSubmissions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "askedUserIds", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "issueSubmissions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "createdBy.userId", "order": "ASCENDING" },
+        { "fieldPath": "askedUserIds", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": [
+    {
+      "collectionGroup": "issueSubmissions",
+      "fieldPath": "askedUsers",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "issueSubmissions",
+      "fieldPath": "createdBy.userName",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "issueSubmissions",
+      "fieldPath": "channelName",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "issueSubmissions",
+      "fieldPath": "problem",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "issueSubmissions",
+      "fieldPath": "blocking",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "issueSubmissions",
+      "fieldPath": "need",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "issueSubmissions",
+      "fieldPath": "note",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "issueSubmissions",
+      "fieldPath": "timezone",
+      "indexes": []
+    }
+  ]
+}
