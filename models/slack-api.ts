@@ -1,0 +1,79 @@
+export type SlackChannelContext = {
+  channelId: string | null;
+  channelName: string | null;
+};
+
+export type SlackCommand = {
+  triggerId: string;
+  context: SlackChannelContext;
+};
+
+export type SlackModal = Record<string, unknown>;
+
+export type SlackBlock = Record<string, unknown>;
+
+export type SlackInputValue = {
+  value?: string;
+  selected_time?: string;
+  selected_user?: string;
+};
+
+export type SlackInteractionPayload = {
+  type: string;
+  user?: {
+    id?: string;
+  };
+  view?: {
+    callback_id?: string;
+    private_metadata?: string;
+    state?: {
+      values?: Record<string, Record<string, SlackInputValue>>;
+    };
+  };
+};
+
+export type SlackMember = {
+  id: string;
+  name: string;
+};
+
+export type DailySubmission = {
+  channel: SlackChannelContext;
+  userId?: string;
+  userName?: string;
+  startTime: string;
+  endTime: string;
+  durationMinutes: number;
+};
+
+export type IssueSubmission = {
+  channel: SlackChannelContext;
+  userId?: string;
+  userName?: string;
+  problem?: string;
+  blocking?: string;
+  askUserId?: string;
+  askUserName?: string;
+  need?: string;
+  minutes: number | null;
+  note?: string;
+};
+
+export type SlackApiResponse = {
+  ok: boolean;
+  error?: string;
+  needed?: string;
+  provided?: string;
+};
+
+export type SlackUserInfoResponse = SlackApiResponse & {
+  user?: {
+    id?: string;
+    real_name?: string;
+    name?: string;
+    profile?: {
+      display_name?: string;
+      real_name?: string;
+    };
+  };
+};
