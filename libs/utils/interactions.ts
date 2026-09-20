@@ -37,16 +37,18 @@ async function publishIssue(submission: IssueSubmission) {
     throw new Error("Channel ID is missing from private_metadata");
   }
 
-  const [submittedBy, askedMember] = await Promise.all([
+  const [submittedBy, askedMembers] = await Promise.all([
     getSlackMember(submission.userId),
-    getSlackMember(submission.askUserId),
+    Promise.all(submission.askUserIds.map(getSlackMember)),
   ]);
   await postSlackMessage(
     submission.channel.channelId,
     createIssueMessage({
       ...submission,
       userName: submittedBy?.name,
-      askUserName: askedMember?.name,
+      askUserNames: askedMembers.flatMap((member) =>
+        member ? [member.name] : [],
+      ),
     }),
   );
 }
@@ -105,7 +107,8 @@ function handleIssueSubmission(payload: SlackInteractionPayload) {
     userId: payload.user?.id,
     problem: getInput(payload, "problem", "problem_input")?.value,
     blocking: getInput(payload, "blocking", "blocking_input")?.value,
-    askUserId: getInput(payload, "ask", "ask_select")?.selected_user,
+    askUserIds:
+      getInput(payload, "ask", "ask_select")?.selected_users ?? [],
     need: getInput(payload, "need", "need_input")?.value,
     minutes: rawMinutes ? Number.parseInt(rawMinutes, 10) : null,
     note: getInput(payload, "note", "note_input")?.value,

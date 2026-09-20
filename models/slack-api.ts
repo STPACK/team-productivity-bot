@@ -15,7 +15,7 @@ export type SlackBlock = Record<string, unknown>;
 export type SlackInputValue = {
   value?: string;
   selected_time?: string;
-  selected_user?: string;
+  selected_users?: string[];
 };
 
 export type SlackInteractionPayload = {
@@ -52,8 +52,8 @@ export type IssueSubmission = {
   userName?: string;
   problem?: string;
   blocking?: string;
-  askUserId?: string;
-  askUserName?: string;
+  askUserIds: string[];
+  askUserNames?: string[];
   need?: string;
   minutes: number | null;
   note?: string;

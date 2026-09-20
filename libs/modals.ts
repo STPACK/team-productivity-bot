@@ -38,7 +38,7 @@ export function createIssueModal(context: SlackChannelContext): SlackModal {
         block_id: "ask",
         label: { type: "plain_text", text: "Ask" },
         element: {
-          type: "users_select",
+          type: "multi_users_select",
           action_id: "ask_select",
           placeholder: { type: "plain_text", text: "ขอใครช่วย" },
         },

@@ -30,22 +30,26 @@ export function createIssueMessage(submission: IssueSubmission) {
   const {
     problem,
     blocking,
-    askUserId,
+    askUserIds,
+    askUserNames,
     need,
     minutes,
     note,
     userId,
   } = submission;
   const noteText = note ? `\n*Note:* ${escapeMrkdwn(note)}` : "";
+  const askMentions =
+    askUserIds.map((userId) => `<@${userId}>`).join(", ") || "-";
+  const askNames = askUserNames?.join(", ") || askMentions;
 
   return {
-    text: `ขอความช่วยเหลือ: ${problem ?? "-"}`,
+    text: `ขอความช่วยเหลือ: ${problem ?? "-"} | Ask: ${askNames}`,
     blocks: [
       {
         type: "section",
         text: {
           type: "mrkdwn",
-          text: `*Problem:* ${escapeMrkdwn(problem)}\n*Blocking:* ${escapeMrkdwn(blocking)}\n*Ask:* (<@${askUserId}>)\n*Need:* ${escapeMrkdwn(need)}\n*Time:* ${minutes ?? "-"} นาที${noteText}\n*Owner issue:*  (<@${userId}>)`,
+          text: `*Problem:* ${escapeMrkdwn(problem)}\n*Blocking:* ${escapeMrkdwn(blocking)}\n*Ask:* ${askMentions}\n*Need:* ${escapeMrkdwn(need)}\n*Time:* ${minutes ?? "-"} นาที${noteText}\n*Owner issue:* <@${userId}>`,
         },
       },
     ] satisfies SlackBlock[],
