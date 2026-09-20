@@ -2,6 +2,8 @@ export async function POST(request: Request) {
   const formData = await request.formData();
 
   const triggerId = formData.get("trigger_id");
+  const channelId = formData.get("channel_id");
+  const channelName = formData.get("channel_name");
 
   const response = await fetch("https://slack.com/api/views.open", {
     method: "POST",
@@ -14,6 +16,10 @@ export async function POST(request: Request) {
       view: {
         type: "modal",
         callback_id: "issue_create",
+        private_metadata: JSON.stringify({
+          channelId: typeof channelId === "string" ? channelId : null,
+          channelName: typeof channelName === "string" ? channelName : null,
+        }),
         title: {
           type: "plain_text",
           text: "ขอความช่วยเหลือ",

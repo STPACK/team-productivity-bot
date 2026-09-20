@@ -6,6 +6,8 @@ type SlackViewsOpenResponse = {
 export async function POST(request: Request) {
   const formData = await request.formData();
   const triggerId = formData.get("trigger_id");
+  const channelId = formData.get("channel_id");
+  const channelName = formData.get("channel_name");
 
   if (typeof triggerId !== "string" || !triggerId) {
     return Response.json({ error: "trigger_id is required" }, { status: 400 });
@@ -30,6 +32,10 @@ export async function POST(request: Request) {
       view: {
         type: "modal",
         callback_id: "daily_create",
+        private_metadata: JSON.stringify({
+          channelId: typeof channelId === "string" ? channelId : null,
+          channelName: typeof channelName === "string" ? channelName : null,
+        }),
         title: {
           type: "plain_text",
           text: "Daily",
