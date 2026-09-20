@@ -49,7 +49,7 @@ export function createIssueMessage(submission: IssueSubmission) {
         type: "section",
         text: {
           type: "mrkdwn",
-          text: `*Problem:* ${escapeMrkdwn(problem)}\n*Blocking:* ${escapeMrkdwn(blocking)}\n*Ask:* ${askMentions}\n*Need:* ${escapeMrkdwn(need)}\n*Time:* ${minutes ?? "-"} นาที${noteText}\n*Owner issue:* <@${userId}>`,
+          text: `**Owner issue:** <@${userId}>\n**Problem:** ${escapeMrkdwn(problem)}\n**Blocking:** ${escapeMrkdwn(blocking)}\n**Ask:** ${askMentions}\n**Need:** ${escapeMrkdwn(need)}\n**Time:** ${minutes ?? "-"} นาที${noteText}\n`,
         },
       },
     ] satisfies SlackBlock[],

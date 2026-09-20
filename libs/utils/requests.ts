@@ -101,3 +101,15 @@ export function getMinutesSinceMidnight(time: string) {
 
   return hours * 60 + minutes;
 }
+
+export function parsePositiveInteger(value: string | undefined) {
+  const normalizedValue = value?.trim();
+
+  if (!normalizedValue || !/^[1-9]\d*$/.test(normalizedValue)) {
+    return null;
+  }
+
+  const number = Number(normalizedValue);
+
+  return Number.isSafeInteger(number) ? number : null;
+}

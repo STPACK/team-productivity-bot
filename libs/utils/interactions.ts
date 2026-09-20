@@ -18,6 +18,7 @@ import {
   getMinutesSinceMidnight,
   isValidSlackRequest,
   parseInteractionPayload,
+  parsePositiveInteger,
 } from "@/libs/utils/requests";
 
 async function publishDaily(submission: DailySubmission) {
@@ -102,6 +103,17 @@ function handleDailySubmission(payload: SlackInteractionPayload) {
 
 function handleIssueSubmission(payload: SlackInteractionPayload) {
   const rawMinutes = getInput(payload, "time", "time_input")?.value;
+  const minutes = parsePositiveInteger(rawMinutes);
+
+  if (minutes === null) {
+    return Response.json({
+      response_action: "errors",
+      errors: {
+        time: "กรุณาระบุจำนวนนาทีเป็นเลขจำนวนเต็มที่มากกว่า 0 เช่น 15",
+      },
+    });
+  }
+
   const submission: IssueSubmission = {
     channel: getChannelContext(payload),
     userId: payload.user?.id,
@@ -110,7 +122,7 @@ function handleIssueSubmission(payload: SlackInteractionPayload) {
     askUserIds:
       getInput(payload, "ask", "ask_select")?.selected_users ?? [],
     need: getInput(payload, "need", "need_input")?.value,
-    minutes: rawMinutes ? Number.parseInt(rawMinutes, 10) : null,
+    minutes,
     note: getInput(payload, "note", "note_input")?.value,
   };
 

@@ -55,7 +55,7 @@ export type IssueSubmission = {
   askUserIds: string[];
   askUserNames?: string[];
   need?: string;
-  minutes: number | null;
+  minutes: number;
   note?: string;
 };
 

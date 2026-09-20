@@ -59,11 +59,10 @@ export function createIssueModal(context: SlackChannelContext): SlackModal {
         block_id: "time",
         label: { type: "plain_text", text: "Time" },
         element: {
-          type: "number_input",
+          type: "plain_text_input",
           action_id: "time_input",
-          is_decimal_allowed: false,
-          min_value: "1",
-          placeholder: { type: "plain_text", text: "คุยกี่นาที" },
+          min_length: 1,
+          placeholder: { type: "plain_text", text: "คุยกี่นาที เช่น 15" },
         },
       },
       {
