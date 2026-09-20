@@ -1,4 +1,6 @@
 import type { DailyTimeRange } from "@/models/slack-api";
+import { isFirestoreConfigured } from "@/libs/firebase/admin";
+import { getChannelDailyTimeRange } from "@/libs/repositories/channel-repository";
 
 const DEFAULT_TIME_RANGE: DailyTimeRange = {
   startTime: "09:00",
@@ -30,7 +32,26 @@ function isTimeRange(value: unknown): value is DailyTimeRange {
 }
 
 export async function getDailyTimeRange(channelId: string | null) {
-  if (!channelId || !process.env.SLACK_DAILY_TIME_RANGES) {
+  if (!channelId) {
+    return DEFAULT_TIME_RANGE;
+  }
+
+  if (isFirestoreConfigured()) {
+    try {
+      const storedRange = await getChannelDailyTimeRange(channelId);
+
+      if (isTimeRange(storedRange)) {
+        return storedRange;
+      }
+    } catch (error) {
+      console.error(
+        "Unable to read channel settings from Firestore; using defaults",
+        error,
+      );
+    }
+  }
+
+  if (!process.env.SLACK_DAILY_TIME_RANGES) {
     return DEFAULT_TIME_RANGE;
   }
 

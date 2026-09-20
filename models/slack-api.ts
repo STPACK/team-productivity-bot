@@ -16,6 +16,7 @@ export type SlackInputValue = {
   value?: string;
   selected_time?: string;
   selected_users?: string[];
+  timezone?: string;
 };
 
 export type SlackInteractionPayload = {
@@ -44,6 +45,8 @@ export type DailySubmission = {
   startTime: string;
   endTime: string;
   durationMinutes: number;
+  date: string;
+  timezone: string;
 };
 
 export type DailyTimeRange = {

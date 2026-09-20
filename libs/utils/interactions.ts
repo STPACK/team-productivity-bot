@@ -13,7 +13,12 @@ import {
   postSlackMessage,
 } from "@/libs/utils/client";
 import {
+  saveDailySubmission,
+  saveIssueSubmission,
+} from "@/libs/repositories/channel-repository";
+import {
   getChannelContext,
+  getCalendarDate,
   getInput,
   getMinutesSinceMidnight,
   isValidSlackRequest,
@@ -27,10 +32,15 @@ async function publishDaily(submission: DailySubmission) {
   }
 
   const member = await getSlackMember(submission.userId);
-  await postSlackMessage(
-    submission.channel.channelId,
-    createDailyMessage({ ...submission, userName: member?.name }),
-  );
+  const enrichedSubmission = { ...submission, userName: member?.name };
+
+  await Promise.all([
+    postSlackMessage(
+      submission.channel.channelId,
+      createDailyMessage(enrichedSubmission),
+    ),
+    saveDailySubmission(enrichedSubmission),
+  ]);
 }
 
 async function publishIssue(submission: IssueSubmission) {
@@ -42,16 +52,21 @@ async function publishIssue(submission: IssueSubmission) {
     getSlackMember(submission.userId),
     Promise.all(submission.askUserIds.map(getSlackMember)),
   ]);
-  await postSlackMessage(
-    submission.channel.channelId,
-    createIssueMessage({
-      ...submission,
-      userName: submittedBy?.name,
-      askUserNames: askedMembers.flatMap((member) =>
-        member ? [member.name] : [],
-      ),
-    }),
-  );
+  const enrichedSubmission = {
+    ...submission,
+    userName: submittedBy?.name,
+    askUserNames: askedMembers.flatMap((member) =>
+      member ? [member.name] : [],
+    ),
+  };
+
+  await Promise.all([
+    postSlackMessage(
+      submission.channel.channelId,
+      createIssueMessage(enrichedSubmission),
+    ),
+    saveIssueSubmission(enrichedSubmission),
+  ]);
 }
 
 function runAfterResponse(task: () => Promise<void>) {
@@ -65,11 +80,8 @@ function runAfterResponse(task: () => Promise<void>) {
 }
 
 function handleDailySubmission(payload: SlackInteractionPayload) {
-  const startTime = getInput(
-    payload,
-    "start_time",
-    "start_time_input",
-  )?.selected_time;
+  const startTimeInput = getInput(payload, "start_time", "start_time_input");
+  const startTime = startTimeInput?.selected_time;
   const endTime = getInput(
     payload,
     "end_time",
@@ -87,6 +99,8 @@ function handleDailySubmission(payload: SlackInteractionPayload) {
     });
   }
 
+  const calendarDate = getCalendarDate(startTimeInput?.timezone);
+
   const submission: DailySubmission = {
     channel: getChannelContext(payload),
     userId: payload.user?.id,
@@ -94,6 +108,7 @@ function handleDailySubmission(payload: SlackInteractionPayload) {
     endTime,
     durationMinutes:
       getMinutesSinceMidnight(endTime) - getMinutesSinceMidnight(startTime),
+    ...calendarDate,
   };
 
   runAfterResponse(() => publishDaily(submission));

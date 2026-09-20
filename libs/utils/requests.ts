@@ -113,3 +113,38 @@ export function parsePositiveInteger(value: string | undefined) {
 
   return Number.isSafeInteger(number) ? number : null;
 }
+
+function formatDateInTimezone(date: Date, timezone: string) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const values = Object.fromEntries(
+    parts.map((part) => [part.type, part.value]),
+  );
+
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+export function getCalendarDate(
+  timezone: string | undefined,
+  date = new Date(),
+) {
+  const fallbackTimezone = process.env.SLACK_TIMEZONE ?? "Asia/Bangkok";
+
+  try {
+    const resolvedTimezone = timezone || fallbackTimezone;
+
+    return {
+      date: formatDateInTimezone(date, resolvedTimezone),
+      timezone: resolvedTimezone,
+    };
+  } catch {
+    return {
+      date: formatDateInTimezone(date, fallbackTimezone),
+      timezone: fallbackTimezone,
+    };
+  }
+}
