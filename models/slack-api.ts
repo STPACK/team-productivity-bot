@@ -46,6 +46,11 @@ export type DailySubmission = {
   durationMinutes: number;
 };
 
+export type DailyTimeRange = {
+  startTime: string;
+  endTime: string;
+};
+
 export type IssueSubmission = {
   channel: SlackChannelContext;
   userId?: string;

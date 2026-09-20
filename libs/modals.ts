@@ -1,4 +1,8 @@
-import type { SlackChannelContext, SlackModal } from "@/models/slack-api";
+import type {
+  DailyTimeRange,
+  SlackChannelContext,
+  SlackModal,
+} from "@/models/slack-api";
 
 export function createIssueModal(context: SlackChannelContext): SlackModal {
   return {
@@ -84,6 +88,7 @@ export function createIssueModal(context: SlackChannelContext): SlackModal {
 export function createDailyModal(
   context: SlackChannelContext,
   timezone: string,
+  timeRange: DailyTimeRange,
 ): SlackModal {
   return {
     type: "modal",
@@ -105,6 +110,7 @@ export function createDailyModal(
           type: "timepicker",
           action_id: "start_time_input",
           timezone,
+          initial_time: timeRange.startTime,
           placeholder: { type: "plain_text", text: "เช่น 09:00" },
         },
       },
@@ -120,6 +126,7 @@ export function createDailyModal(
           type: "timepicker",
           action_id: "end_time_input",
           timezone,
+          initial_time: timeRange.endTime,
           placeholder: { type: "plain_text", text: "เช่น 09:34" },
         },
       },

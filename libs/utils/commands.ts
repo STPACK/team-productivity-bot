@@ -2,7 +2,9 @@ import type { SlackChannelContext, SlackModal } from "@/models/slack-api";
 import { openSlackModal } from "@/libs/utils/client";
 import { parseSlackCommand } from "@/libs/utils/requests";
 
-type ModalFactory = (context: SlackChannelContext) => SlackModal;
+type ModalFactory = (
+  context: SlackChannelContext,
+) => SlackModal | Promise<SlackModal>;
 
 export async function handleSlackCommand(
   request: Request,
@@ -15,7 +17,8 @@ export async function handleSlackCommand(
   }
 
   try {
-    await openSlackModal(command.triggerId, createModal(command.context));
+    const modal = await createModal(command.context);
+    await openSlackModal(command.triggerId, modal);
     return new Response(null, { status: 200 });
   } catch (error) {
     return Response.json(
