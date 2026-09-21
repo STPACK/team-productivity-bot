@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f5f7fb;
+  --foreground: #172033;
 }
 
 @theme inline {
@@ -12,15 +12,86 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  margin: 0;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.dashboard-shell {
+  margin: 0 auto;
+  max-width: 1440px;
+  padding: 48px 32px;
+  width: 100%;
+}
+
+.dashboard-header {
+  margin-bottom: 28px;
+}
+
+.dashboard-eyebrow {
+  color: #4f46e5;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  margin: 0 0 8px;
+  text-transform: uppercase;
+}
+
+.dashboard-title {
+  color: #172033;
+  font-size: clamp(28px, 4vw, 42px);
+  letter-spacing: -0.035em;
+  line-height: 1.15;
+  margin: 0;
+}
+
+.dashboard-description {
+  color: #697386;
+  margin: 10px 0 0;
+}
+
+.dashboard-card {
+  border: 1px solid #e7eaf0;
+  box-shadow: 0 18px 45px rgba(23, 32, 51, 0.06);
+}
+
+.channel-link {
+  color: #312e81;
+  font-weight: 650;
+}
+
+.cell-secondary {
+  color: #8a94a6;
+  font-size: 12px;
+}
+
+.cell-wrap {
+  max-width: 300px;
+  min-width: 180px;
+  white-space: pre-wrap;
+}
+
+.member-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.back-link {
+  color: #4f46e5;
+  display: inline-block;
+  font-weight: 600;
+  margin-bottom: 18px;
+}
+
+@media (max-width: 640px) {
+  .dashboard-shell {
+    padding: 28px 16px;
+  }
 }
