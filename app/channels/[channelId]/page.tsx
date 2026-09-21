@@ -1,4 +1,4 @@
-import { ChannelDashboard } from "@/app/_components/channel-dashboard";
+import { ChannelDashboard } from "@/components/channel-dashboard";
 
 export default async function ChannelPage({
   params,

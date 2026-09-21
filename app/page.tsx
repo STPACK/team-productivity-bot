@@ -1,4 +1,4 @@
-import { ChannelList } from "@/app/_components/channel-list";
+import { ChannelList } from "@/components/channel-list";
 
 export default function Home() {
   return (
