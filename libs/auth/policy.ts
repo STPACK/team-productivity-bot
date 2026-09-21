@@ -1,5 +1,5 @@
 export const ALLOWED_COMPANY_DOMAIN =
-  process.env.NEXT_PUBLIC_FIREBASE_ALLOWED_EMAIL_DOMAIN?.trim().toLowerCase() ||
+  process.env.NEXT_FIREBASE_ALLOWED_EMAIL_DOMAIN?.trim().toLowerCase() ||
   "sennalabs.com";
 
 export type FirebaseIdentityClaims = {

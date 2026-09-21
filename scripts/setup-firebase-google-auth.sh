@@ -67,14 +67,14 @@ printf "โดเมนอีเมลที่อนุญาต [sennalabs.com
 read -r allowed_domain
 allowed_domain="${allowed_domain:-sennalabs.com}"
 
-upsert_env "NEXT_PUBLIC_FIREBASE_API_KEY" "$api_key"
-upsert_env "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN" "$auth_domain"
-upsert_env "NEXT_PUBLIC_FIREBASE_PROJECT_ID" "$project_id"
-upsert_env "NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET" "$storage_bucket"
-upsert_env "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID" "$messaging_sender_id"
-upsert_env "NEXT_PUBLIC_FIREBASE_APP_ID" "$app_id"
-upsert_env "NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID" "$measurement_id"
-upsert_env "NEXT_PUBLIC_FIREBASE_ALLOWED_EMAIL_DOMAIN" "$allowed_domain"
+upsert_env "NEXT_FIREBASE_API_KEY" "$api_key"
+upsert_env "NEXT_FIREBASE_AUTH_DOMAIN" "$auth_domain"
+upsert_env "NEXT_FIREBASE_PROJECT_ID" "$project_id"
+upsert_env "NEXT_FIREBASE_STORAGE_BUCKET" "$storage_bucket"
+upsert_env "NEXT_FIREBASE_MESSAGING_SENDER_ID" "$messaging_sender_id"
+upsert_env "NEXT_FIREBASE_APP_ID" "$app_id"
+upsert_env "NEXT_FIREBASE_MEASUREMENT_ID" "$measurement_id"
+upsert_env "NEXT_FIREBASE_ALLOWED_EMAIL_DOMAIN" "$allowed_domain"
 chmod 600 "$ENV_FILE"
 
 printf "บันทึก Web SDK config ลง %s แล้ว (ไม่ได้แสดงค่าออกหน้าจอ)\n" "$ENV_FILE"
