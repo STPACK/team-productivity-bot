@@ -2,10 +2,12 @@ import { after } from "next/server";
 import {
   createDailyMessage,
   createIssueMessage,
+  createPrMessage,
 } from "@/libs/messages";
 import type {
   DailySubmission,
   IssueSubmission,
+  PrSubmission,
   SlackInteractionPayload,
 } from "@/models/slack-api";
 import {
@@ -24,8 +26,10 @@ import {
   getRequesterUserId,
   getRequesterUserName,
   isValidSlackRequest,
+  parsePrUrl,
   parseInteractionPayload,
   parsePositiveInteger,
+  splitTicketLinks,
 } from "@/libs/utils/requests";
 import {
   resolveSubmissionIdentity,
@@ -83,6 +87,19 @@ async function publishIssue(submission: IssueSubmission) {
     ),
     saveIssueSubmission(enrichedSubmission),
   ]);
+}
+
+async function publishPr(submission: PrSubmission) {
+  if (!submission.channel.channelId) {
+    throw new Error("Channel ID is missing from private_metadata");
+  }
+
+  // ponytail: nothing is stored and no dashboard reads this, so <@id> mentions are
+  // enough — skips the users.info fan-out publishIssue needs for saved display names.
+  await postSlackMessage(
+    submission.channel.channelId,
+    createPrMessage(submission),
+  );
 }
 
 function runAfterResponse(task: () => Promise<void>) {
@@ -175,6 +192,34 @@ function handleIssueSubmission(payload: SlackInteractionPayload) {
   return new Response(null, { status: 200 });
 }
 
+function handlePrSubmission(payload: SlackInteractionPayload) {
+  const prUrl = parsePrUrl(getInput(payload, "pr_link", "pr_link_input")?.value);
+
+  if (!prUrl) {
+    return Response.json({
+      response_action: "errors",
+      errors: {
+        pr_link: "กรุณาใส่ลิงก์ที่ขึ้นต้นด้วย http:// หรือ https://",
+      },
+    });
+  }
+
+  const submission: PrSubmission = {
+    channel: getChannelContext(payload),
+    ...getSubmissionIdentity(payload),
+    ticketLinks: splitTicketLinks(
+      getInput(payload, "ticket_link", "ticket_link_input")?.value,
+    ),
+    prUrl,
+    reviewerUserIds:
+      getInput(payload, "reviewer", "reviewer_select")?.selected_users ?? [],
+  };
+
+  runAfterResponse(() => publishPr(submission));
+
+  return new Response(null, { status: 200 });
+}
+
 export async function handleSlackInteraction(request: Request) {
   const rawBody = await request.text();
 
@@ -197,6 +242,8 @@ export async function handleSlackInteraction(request: Request) {
       return handleDailySubmission(payload);
     case "issue_create":
       return handleIssueSubmission(payload);
+    case "pr_create":
+      return handlePrSubmission(payload);
     default:
       return new Response(null, { status: 200 });
   }

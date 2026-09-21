@@ -95,3 +95,12 @@ export type SlackUserInfoResponse = SlackApiResponse & {
     };
   };
 };
+
+export type PrSubmission = {
+  channel: SlackChannelContext;
+  userId?: string;
+  userName?: string;
+  ticketLinks: string[];
+  prUrl: string;
+  reviewerUserIds: string[];
+};

@@ -130,3 +130,57 @@ export function createDailyModal(
     ],
   };
 }
+
+export function createPrModal(metadata: SlackModalMetadata): SlackModal {
+  return {
+    type: "modal",
+    callback_id: "pr_create",
+    private_metadata: JSON.stringify(metadata),
+    title: { type: "plain_text", text: "Request PR Review" },
+    submit: { type: "plain_text", text: "ส่ง" },
+    close: { type: "plain_text", text: "ยกเลิก" },
+    blocks: [
+      {
+        type: "input",
+        block_id: "ticket_link",
+        label: { type: "plain_text", text: "Ticket Link" },
+        hint: {
+          type: "plain_text",
+          text: "บรรทัดละ 1 รายการ ใส่ชื่อให้ลิงก์ได้ด้วย [ชื่อ](ลิงก์)",
+        },
+        element: {
+          type: "plain_text_input",
+          action_id: "ticket_link_input",
+          multiline: true,
+          placeholder: {
+            type: "plain_text",
+            text: "[FE (Mobile) : Interface stock](https://toolings.co/company/2/projects/387?selectedTicketId=113263)",
+          },
+        },
+      },
+      {
+        type: "input",
+        block_id: "pr_link",
+        label: { type: "plain_text", text: "PR Link" },
+        element: {
+          type: "plain_text_input",
+          action_id: "pr_link_input",
+          placeholder: {
+            type: "plain_text",
+            text: "เช่น https://github.com/org/repo/pull/123",
+          },
+        },
+      },
+      {
+        type: "input",
+        block_id: "reviewer",
+        label: { type: "plain_text", text: "Reviewer" },
+        element: {
+          type: "multi_users_select",
+          action_id: "reviewer_select",
+          placeholder: { type: "plain_text", text: "เลือกคนรีวิว" },
+        },
+      },
+    ],
+  };
+}

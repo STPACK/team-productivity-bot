@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import { afterEach, test } from "node:test";
-import { isValidSlackRequest } from "./requests.ts";
+import {
+  isValidSlackRequest,
+  parsePrUrl,
+  splitTicketLinks,
+} from "./requests.ts";
 
 const SECRET = "8f742231b10e8888abcd99yyyzzz85a5";
 const BODY = "payload=%7B%22type%22%3A%22block_actions%22%7D";
@@ -73,4 +77,64 @@ test("rejects a tampered body", () => {
 test("rejects missing signature headers", () => {
   const bare = new Request("https://example.com/api/slack/interactions", { method: "POST", body: BODY });
   assert.equal(isValidSlackRequest(bare, BODY), false);
+});
+
+test("accepts pull request URLs from any host", () => {
+  for (const url of [
+    "https://github.com/org/repo/pull/42",
+    "https://gitlab.com/group/project/-/merge_requests/42",
+    "https://dev.azure.com/org/project/_git/repo/pullrequest/42",
+    "https://bitbucket.org/org/repo/pull-requests/42",
+    "https://git.company.internal:8443/org/repo/pull/42",
+    "http://localhost:3000/org/repo/pull/42",
+  ]) {
+    assert.equal(parsePrUrl(url), url, `${url} should be accepted`);
+  }
+});
+
+test("keeps the query string and fragment intact", () => {
+  const url = "https://dev.azure.com/org/proj/_git/repo/pullrequest/7?_a=files#path=/x";
+
+  assert.equal(parsePrUrl(url), url);
+});
+
+test("tolerates surrounding whitespace", () => {
+  assert.equal(
+    parsePrUrl("  https://github.com/org/repo/pull/7  "),
+    "https://github.com/org/repo/pull/7",
+  );
+});
+
+test("rejects empty input and anything that is not an http(s) URL", () => {
+  for (const bad of [
+    undefined,
+    "",
+    "   ",
+    "not a url",
+    "github.com/org/repo/pull/7",
+    "javascript:alert(1)",
+    "data:text/html,<script>alert(1)</script>",
+    "slack://channel?id=C1",
+    "file:///etc/passwd",
+  ]) {
+    assert.equal(parsePrUrl(bad), null, `${bad} should be rejected`);
+  }
+});
+
+test("splits ticket links one per line and drops blanks", () => {
+  assert.deepEqual(
+    splitTicketLinks("  https://jira/PROJ-1 \n\n https://jira/PROJ-2  \r\n"),
+    ["https://jira/PROJ-1", "https://jira/PROJ-2"],
+  );
+});
+
+test("keeps free text on a line intact instead of splitting on spaces", () => {
+  assert.deepEqual(splitTicketLinks("PROJ-123 needs backport"), [
+    "PROJ-123 needs backport",
+  ]);
+});
+
+test("returns an empty list when no tickets were given", () => {
+  assert.deepEqual(splitTicketLinks(undefined), []);
+  assert.deepEqual(splitTicketLinks("   \n  "), []);
 });

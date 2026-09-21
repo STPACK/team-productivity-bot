@@ -186,3 +186,36 @@ export function getCalendarDate(
     };
   }
 }
+
+// ponytail: any http(s) URL passes. GitHub, GitLab and Azure DevOps all shape their
+// PR paths differently, and Slack unfurls the link either way, so host-specific
+// patterns would be upkeep for nothing. The check only keeps a typo or a
+// javascript:/data: payload out of the message we post.
+export function parsePrUrl(value: string | undefined) {
+  const trimmed = value?.trim();
+
+  if (!trimmed) {
+    return null;
+  }
+
+  try {
+    const url = new URL(trimmed);
+
+    return url.protocol === "https:" || url.protocol === "http:"
+      ? url.toString()
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+// ponytail: split on newlines only, not whitespace — the field is free text, so
+// "PROJ-123 needs backport" must stay one entry instead of becoming three.
+export function splitTicketLinks(value: string | undefined) {
+  return (
+    value
+      ?.split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean) ?? []
+  );
+}
