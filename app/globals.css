@@ -30,6 +30,58 @@ body {
   width: 100%;
 }
 
+.dashboard-user,
+.dashboard-user-shell {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.dashboard-user {
+  margin-bottom: 20px;
+}
+
+.dashboard-user-shell {
+  margin: 24px auto -28px;
+  max-width: 1440px;
+  padding: 0 32px;
+}
+
+.login-shell {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.login-card {
+  border: 1px solid #e7eaf0;
+  box-shadow: 0 24px 70px rgba(23, 32, 51, 0.1);
+  max-width: 420px;
+  text-align: center;
+  width: 100%;
+}
+
+.login-logo {
+  align-items: center;
+  background: #4f46e5;
+  border-radius: 16px;
+  color: #fff;
+  display: inline-flex;
+  font-size: 20px;
+  font-weight: 800;
+  height: 56px;
+  justify-content: center;
+  letter-spacing: -0.04em;
+  width: 56px;
+}
+
+.login-domain {
+  display: block;
+  font-size: 12px;
+  margin-top: 14px;
+}
+
 .dashboard-header {
   margin-bottom: 28px;
 }
@@ -93,5 +145,10 @@ body {
 @media (max-width: 640px) {
   .dashboard-shell {
     padding: 28px 16px;
+  }
+
+  .dashboard-user-shell {
+    margin-bottom: -20px;
+    padding: 0 16px;
   }
 }

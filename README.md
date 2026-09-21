@@ -13,6 +13,19 @@ FIREBASE_CLIENT_EMAIL=firebase-adminsdk-...@your-project-id.iam.gserviceaccount.
 FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
 ```
 
+Enable Google in Firebase Authentication, then add the Firebase Web SDK config
+and the allowed company email domain. The setup wizard preserves the existing
+server credentials and writes the browser config to `.env.local`:
+
+```bash
+./scripts/setup-firebase-google-auth.sh
+```
+
+The dashboard accepts only verified Google identities from the exact configured
+domain (`sennalabs.com` by default). The Google hosted-domain parameter only
+guides account selection; authorization is enforced again by the server before
+it creates an HttpOnly session cookie.
+
 The Firebase private key must remain server-side. Daily and issue submissions
 are stored under `slackChannels/{channelId}` in Firestore.
 

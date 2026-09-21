@@ -7,6 +7,14 @@ import type {
 async function getJson<T>(url: string): Promise<T> {
   const response = await fetch(url);
 
+  if (response.status === 401 && typeof window !== "undefined") {
+    const next = `${window.location.pathname}${window.location.search}`;
+    const loginUrl = new URL("/login", window.location.origin);
+    loginUrl.searchParams.set("next", next);
+    window.location.assign(loginUrl.toString());
+    throw new Error("Session expired");
+  }
+
   if (!response.ok) {
     const result = (await response.json().catch(() => null)) as {
       error?: string;

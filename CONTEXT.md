@@ -27,3 +27,7 @@ _Avoid_: Owner, submitter
 **Asked Member**:
 A Slack member whose help is requested in an Issue Submission.
 _Avoid_: Assignee
+
+**Company Member**:
+A person with a verified Google identity whose email belongs to the approved company domain. Only Company Members may access the dashboard and its data APIs.
+_Avoid_: Google user, dashboard user

@@ -6,6 +6,7 @@ import {
   getApps,
   initializeApp,
 } from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 
 function getFirebaseApp() {
@@ -45,4 +46,8 @@ export function isFirestoreConfigured() {
 
 export function getDatabase() {
   return getFirestore(getFirebaseApp());
+}
+
+export function getFirebaseAuth() {
+  return getAuth(getFirebaseApp());
 }
