@@ -185,6 +185,16 @@ export function createPrModal(metadata: SlackModalMetadata): SlackModal {
       },
       {
         type: "input",
+        block_id: "reviewer",
+        label: { type: "plain_text", text: "Reviewer" },
+        element: {
+          type: "multi_users_select",
+          action_id: "reviewer_select",
+          placeholder: { type: "plain_text", text: "เลือกคนรีวิว" },
+        },
+      },
+      {
+        type: "input",
         block_id: "priority",
         label: { type: "plain_text", text: "Priority" },
         element: {
@@ -196,16 +206,6 @@ export function createPrModal(metadata: SlackModalMetadata): SlackModal {
             ) ?? PR_PRIORITIES[0],
           ),
           options: PR_PRIORITIES.map(priorityOption),
-        },
-      },
-      {
-        type: "input",
-        block_id: "reviewer",
-        label: { type: "plain_text", text: "Reviewer" },
-        element: {
-          type: "multi_users_select",
-          action_id: "reviewer_select",
-          placeholder: { type: "plain_text", text: "เลือกคนรีวิว" },
         },
       },
       {
