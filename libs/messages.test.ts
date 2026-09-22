@@ -215,14 +215,6 @@ test("mentions every watcher in the merged thread reply", () => {
   assert.match(text, /<@U_W1>, <@U_W2>/);
 });
 
-test("still reports a merge when there are no watchers", () => {
-  const { text, blocks } = createPrMergedMessage([], "U_MERGER");
-  const body = (blocks[0] as { text: { text: string } }).text.text;
-
-  assert.equal(body, "*Merged* โดย <@U_MERGER>");
-  assert.equal(text, "Merged");
-});
-
 test("omits the merger when Slack did not say who clicked", () => {
   const body = (
     createPrMergedMessage(["U_W1"], undefined).blocks[0] as {

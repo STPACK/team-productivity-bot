@@ -5,10 +5,6 @@ import type {
   SlackBlock,
 } from "@/models/slack-api";
 
-// ponytail: the watcher list rides in the Merged button's own `value` because the PR
-// flow stores nothing. Slack caps that field at 2000 chars — about 166 ids — so move
-// to chat.postMessage metadata if a channel ever needs more than that. Kept beside the
-// button that carries it, so the encode/decode pair cannot drift apart.
 export function encodeWatcherUserIds(userIds: string[]) {
   return userIds.join(",") || undefined;
 }
@@ -82,8 +78,6 @@ export function createIssueMessage(
             action_id: "issue_delete",
             style: "danger",
             text: { type: "plain_text", text: "Delete" },
-            // Owner id and Firestore row id both ride along, so the click can be
-            // authorised and the record located without another lookup.
             value: encodeIssueDeleteValue(userId, issueId),
             confirm: {
               title: { type: "plain_text", text: "ลบ issue นี้" },
@@ -102,9 +96,6 @@ export function createIssueMessage(
   };
 }
 
-// ponytail: `[label](url)` is the one link form people paste out of a ticket tool,
-// so translate just that into Slack's <url|label> instead of pulling in a Markdown
-// parser. The protocol is pinned in the pattern, so javascript: can never match.
 const MARKDOWN_LINK = /^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)$/;
 
 function formatTicketLink(raw: string) {
@@ -117,8 +108,6 @@ function formatTicketLink(raw: string) {
   const [, label, url] = match;
 
   try {
-    // Re-serialising through URL drops anything malformed and percent-encodes the
-    // odd characters that could otherwise break out of the <...> link.
     const href = new URL(url).toString();
 
     return `<${escapeMrkdwn(href)}|${escapeMrkdwn(label)}>`;
@@ -152,8 +141,6 @@ export function createPrMessage(submission: PrSubmission) {
         type: "section",
         text: {
           type: "mrkdwn",
-          // Posted bare so Slack autolinks and unfurls it, which beats any label we
-          // could guess for an arbitrary host. Everything typed goes through escapeMrkdwn.
           text: `*Owner PR:* <@${userId}>\n*Ticket:* ${formatTicketLinks(ticketLinks)}\n*PR:* ${escapeMrkdwn(prUrl)}\n*Reviewer:* ${reviewers}\n`,
         },
       },
@@ -166,8 +153,6 @@ export function createPrMessage(submission: PrSubmission) {
             action_id: "pr_merged",
             style: "primary",
             text: { type: "plain_text", text: "Merged" },
-            // Watchers are deliberately absent from the text above and travel here
-            // instead, so nobody is pinged until this button is pressed.
             value: encodeWatcherUserIds(watcherUserIds),
           },
           {
@@ -175,8 +160,6 @@ export function createPrMessage(submission: PrSubmission) {
             action_id: "pr_delete",
             style: "danger",
             text: { type: "plain_text", text: "Delete" },
-            // The owner id travels with the button so the click can be authorised
-            // without re-parsing the rendered message text.
             value: userId,
             confirm: {
               title: { type: "plain_text", text: "ลบข้อความนี้" },
@@ -202,17 +185,13 @@ export function createPrMergedMessage(
   const watchers = watcherUserIds
     .map((watcherId) => `<@${watcherId}>`)
     .join(", ");
-  const mergedBy = mergedByUserId ? ` โดย <@${mergedByUserId}>` : "";
-  const summary = watchers
-    ? `*Merged*${mergedBy}\n${watchers}`
-    : `*Merged*${mergedBy}`;
 
   return {
-    text: watchers ? `Merged · แจ้ง ${watchers}` : "Merged",
+    text: `Merged · แจ้ง ${watchers}`,
     blocks: [
       {
         type: "section",
-        text: { type: "mrkdwn", text: summary },
+        text: { type: "mrkdwn", text: `*Already merged* ${watchers}` },
       },
     ] satisfies SlackBlock[],
   };
@@ -223,7 +202,6 @@ type PrActionsBlock = {
   elements?: { action_id?: string }[];
 };
 
-// Fails closed: an absent owner id on the button means nobody is allowed to delete.
 export function isMessageOwner(
   ownerUserId: string | undefined,
   clickedByUserId: string | undefined,
@@ -231,8 +209,6 @@ export function isMessageOwner(
   return Boolean(ownerUserId) && ownerUserId === clickedByUserId;
 }
 
-// ponytail: ":" separates the two fields because neither a Slack user id
-// ([A-Z0-9]) nor a Firestore auto-id ([A-Za-z0-9]) can contain one.
 export function encodeIssueDeleteValue(
   ownerUserId: string | undefined,
   issueId: string,
@@ -253,8 +229,7 @@ export function createPrMergedUpdate(
   const originalBlocks = message.blocks ?? [];
   const isActions = (block: SlackBlock) =>
     (block as PrActionsBlock).block_id === "pr_actions";
-  // The original Delete button is reused verbatim so it keeps the owner id in its
-  // value — re-deriving it here would need submission data we no longer hold.
+
   const deleteButton = (
     originalBlocks.find(isActions) as PrActionsBlock | undefined
   )?.elements?.find((element) => element.action_id === "pr_delete");

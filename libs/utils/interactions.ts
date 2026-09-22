@@ -248,9 +248,11 @@ function handleMessageAction(payload: SlackInteractionPayload) {
   const clickedByUserId = payload.user?.id;
 
   switch (action.action_id) {
-    case "pr_merged":
+    case "pr_merged": {
+      const watcherUserIds = decodeWatcherUserIds(action.value);
+
       runAfterResponse(async () => {
-        await Promise.all([
+        const tasks = [
           // Dropping the Merged button is what makes this single-use, and the
           // ✅ marker it leaves behind is what tells the channel the PR is in.
           // ponytail: two clicks in the same instant can still both land — a lock
@@ -260,18 +262,25 @@ function handleMessageAction(payload: SlackInteractionPayload) {
             messageTs,
             createPrMergedUpdate(payload.message ?? {}, clickedByUserId),
           ),
-          postSlackMessage(
-            channelId,
-            createPrMergedMessage(
-              decodeWatcherUserIds(action.value),
-              clickedByUserId,
+        ];
+
+        // With nobody to mention, the ✅ marker above already says it all and a
+        // thread reply would just be noise.
+        if (watcherUserIds.length) {
+          tasks.push(
+            postSlackMessage(
+              channelId,
+              createPrMergedMessage(watcherUserIds, clickedByUserId),
+              messageTs,
             ),
-            messageTs,
-          ),
-        ]);
+          );
+        }
+
+        await Promise.all(tasks);
       });
 
       return new Response(null, { status: 200 });
+    }
     case "pr_delete":
       if (!isMessageOwner(action.value, clickedByUserId)) {
         if (clickedByUserId) {
