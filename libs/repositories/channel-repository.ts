@@ -223,7 +223,26 @@ export async function saveDailySubmission(submission: DailySubmission) {
   await batch.commit();
 }
 
-export async function saveIssueSubmission(submission: IssueSubmission) {
+// Firestore mints document ids locally, so the Slack message can carry the row id
+// in its Delete button without waiting for the write to land.
+export function newIssueSubmissionId(channelId: string) {
+  return getChannelDocument(channelId).collection("issueSubmissions").doc().id;
+}
+
+export async function deleteIssueSubmission(
+  channelId: string,
+  issueId: string,
+) {
+  await getChannelDocument(channelId)
+    .collection("issueSubmissions")
+    .doc(issueId)
+    .delete();
+}
+
+export async function saveIssueSubmission(
+  submission: IssueSubmission,
+  issueId: string,
+) {
   const channelId = submission.channel.channelId;
 
   if (!channelId) {
@@ -231,7 +250,7 @@ export async function saveIssueSubmission(submission: IssueSubmission) {
   }
 
   const channel = getChannelDocument(channelId);
-  const record = channel.collection("issueSubmissions").doc();
+  const record = channel.collection("issueSubmissions").doc(issueId);
   const batch = getDatabase().batch();
   const recordData = createIssueRecordData(submission);
 

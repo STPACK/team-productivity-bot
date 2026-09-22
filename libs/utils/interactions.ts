@@ -2,11 +2,12 @@ import { after } from "next/server";
 import {
   createDailyMessage,
   createIssueMessage,
-  canDeletePrMessage,
   createPrMergedMessage,
   createPrMergedUpdate,
   createPrMessage,
+  decodeIssueDeleteValue,
   decodeWatcherUserIds,
+  isMessageOwner,
 } from "@/libs/messages";
 import type {
   DailySubmission,
@@ -22,6 +23,8 @@ import {
   updateSlackMessage,
 } from "@/libs/utils/client";
 import {
+  deleteIssueSubmission,
+  newIssueSubmissionId,
   saveDailySubmission,
   saveIssueSubmission,
 } from "@/libs/repositories/channel-repository";
@@ -64,10 +67,13 @@ async function publishDaily(submission: DailySubmission) {
 }
 
 async function publishIssue(submission: IssueSubmission) {
-  if (!submission.channel.channelId) {
+  const channelId = submission.channel.channelId;
+
+  if (!channelId) {
     throw new Error("Channel ID is missing from private_metadata");
   }
 
+  const issueId = newIssueSubmissionId(channelId);
   const [submittedBy, askedMembers] = await Promise.all([
     getSlackMember(submission.userId, "issue_submitter"),
     Promise.all(
@@ -89,10 +95,10 @@ async function publishIssue(submission: IssueSubmission) {
 
   await Promise.all([
     postSlackMessage(
-      submission.channel.channelId,
-      createIssueMessage(enrichedSubmission),
+      channelId,
+      createIssueMessage(enrichedSubmission, issueId),
     ),
-    saveIssueSubmission(enrichedSubmission),
+    saveIssueSubmission(enrichedSubmission, issueId),
   ]);
 }
 
@@ -229,7 +235,7 @@ function handlePrSubmission(payload: SlackInteractionPayload) {
   return new Response(null, { status: 200 });
 }
 
-function handlePrAction(payload: SlackInteractionPayload) {
+function handleMessageAction(payload: SlackInteractionPayload) {
   const action = payload.actions?.[0];
   const channelId = payload.channel?.id;
   // The button lives on the parent message, so its ts is also the thread to reply in.
@@ -267,7 +273,7 @@ function handlePrAction(payload: SlackInteractionPayload) {
 
       return new Response(null, { status: 200 });
     case "pr_delete":
-      if (!canDeletePrMessage(action.value, clickedByUserId)) {
+      if (!isMessageOwner(action.value, clickedByUserId)) {
         if (clickedByUserId) {
           runAfterResponse(() =>
             postSlackEphemeral(
@@ -284,6 +290,32 @@ function handlePrAction(payload: SlackInteractionPayload) {
       runAfterResponse(() => deleteSlackMessage(channelId, messageTs));
 
       return new Response(null, { status: 200 });
+    case "issue_delete": {
+      const target = decodeIssueDeleteValue(action.value);
+
+      if (!target || !isMessageOwner(target.ownerUserId, clickedByUserId)) {
+        if (clickedByUserId) {
+          runAfterResponse(() =>
+            postSlackEphemeral(
+              channelId,
+              clickedByUserId,
+              "ลบได้เฉพาะเจ้าของ issue เท่านั้น",
+            ),
+          );
+        }
+
+        return new Response(null, { status: 200 });
+      }
+
+      runAfterResponse(async () => {
+        await Promise.all([
+          deleteSlackMessage(channelId, messageTs),
+          deleteIssueSubmission(channelId, target.issueId),
+        ]);
+      });
+
+      return new Response(null, { status: 200 });
+    }
     default:
       return new Response(null, { status: 200 });
   }
@@ -303,7 +335,7 @@ export async function handleSlackInteraction(request: Request) {
   }
 
   if (payload.type === "block_actions") {
-    return handlePrAction(payload);
+    return handleMessageAction(payload);
   }
 
   if (payload.type !== "view_submission") {

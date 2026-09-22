@@ -1,12 +1,15 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  canDeletePrMessage,
+  createIssueMessage,
   createPrMergedMessage,
   createPrMergedUpdate,
   createPrMessage,
+  decodeIssueDeleteValue,
   decodeWatcherUserIds,
+  encodeIssueDeleteValue,
   encodeWatcherUserIds,
+  isMessageOwner,
 } from "./messages.ts";
 import type { PrSubmission } from "@/models/slack-api";
 
@@ -257,17 +260,17 @@ test("stays inside Slack's 2000 char button value cap for a big channel", () => 
   );
 });
 
-test("only the PR owner may delete", () => {
-  assert.equal(canDeletePrMessage("U_OWNER", "U_OWNER"), true);
-  assert.equal(canDeletePrMessage("U_OWNER", "U_SOMEONE_ELSE"), false);
+test("only the owner may delete", () => {
+  assert.equal(isMessageOwner("U_OWNER", "U_OWNER"), true);
+  assert.equal(isMessageOwner("U_OWNER", "U_SOMEONE_ELSE"), false);
 });
 
 test("nobody may delete when the owner id is missing or unknown", () => {
   // Fail closed rather than letting an unattributed message be deleted by anyone.
-  assert.equal(canDeletePrMessage(undefined, "U_OWNER"), false);
-  assert.equal(canDeletePrMessage("", "U_OWNER"), false);
-  assert.equal(canDeletePrMessage("U_OWNER", undefined), false);
-  assert.equal(canDeletePrMessage(undefined, undefined), false);
+  assert.equal(isMessageOwner(undefined, "U_OWNER"), false);
+  assert.equal(isMessageOwner("", "U_OWNER"), false);
+  assert.equal(isMessageOwner("U_OWNER", undefined), false);
+  assert.equal(isMessageOwner(undefined, undefined), false);
 });
 
 test("the Delete button carries the owner id", () => {
@@ -338,4 +341,87 @@ test("still produces a marker when Slack sends no blocks back", () => {
     blocks.map((block) => (block as { block_id?: string }).block_id),
     ["pr_merged_marker"],
   );
+});
+
+function issueActions(issueId: string, userId: string | undefined) {
+  const message = createIssueMessage(
+    {
+      channel: { channelId: "C1", channelName: "dev" },
+      userId,
+      problem: "build พัง",
+      blocking: "deploy ไม่ได้",
+      askUserIds: ["U_ASK"],
+      need: "ช่วยดู CI",
+      minutes: 15,
+      createdDate: "2026-09-22",
+      timezone: "Asia/Bangkok",
+    },
+    issueId,
+  );
+
+  return {
+    message,
+    actions: message.blocks[1] as {
+      type: string;
+      block_id?: string;
+      elements: { action_id: string; value?: string; style?: string; confirm?: unknown }[];
+    },
+  };
+}
+
+test("round-trips the issue owner and row id through the button value", () => {
+  const value = encodeIssueDeleteValue("U_OWNER", "ISSUE_DOC_ID");
+
+  assert.equal(value, "U_OWNER:ISSUE_DOC_ID");
+  assert.deepEqual(decodeIssueDeleteValue(value), {
+    ownerUserId: "U_OWNER",
+    issueId: "ISSUE_DOC_ID",
+  });
+});
+
+test("refuses to encode or decode a half-filled issue delete value", () => {
+  assert.equal(encodeIssueDeleteValue(undefined, "ISSUE_DOC_ID"), undefined);
+  assert.equal(encodeIssueDeleteValue("U_OWNER", ""), undefined);
+  assert.equal(decodeIssueDeleteValue(undefined), null);
+  assert.equal(decodeIssueDeleteValue(""), null);
+  assert.equal(decodeIssueDeleteValue("U_OWNER"), null);
+  assert.equal(decodeIssueDeleteValue(":ISSUE_DOC_ID"), null);
+  assert.equal(decodeIssueDeleteValue("U_OWNER:"), null);
+});
+
+test("gives the issue message a single confirmed Delete button", () => {
+  const { actions } = issueActions("ISSUE_DOC_ID", "U_OWNER");
+
+  assert.equal(actions.type, "actions");
+  assert.equal(actions.block_id, "issue_actions");
+  assert.deepEqual(
+    actions.elements.map((element) => element.action_id),
+    ["issue_delete"],
+  );
+  assert.equal(actions.elements[0].style, "danger");
+  assert.ok(actions.elements[0].confirm, "deleting a stored row must be confirmed");
+});
+
+test("carries both ids so the row can be found and the click authorised", () => {
+  const { actions } = issueActions("ROW123", "U_OWNER");
+  const target = decodeIssueDeleteValue(actions.elements[0].value);
+
+  assert.equal(target?.issueId, "ROW123");
+  assert.equal(isMessageOwner(target?.ownerUserId, "U_OWNER"), true);
+  assert.equal(isMessageOwner(target?.ownerUserId, "U_ASK"), false);
+});
+
+test("leaves the issue Delete button inert when the owner is unknown", () => {
+  const { actions } = issueActions("ROW123", undefined);
+
+  assert.equal(actions.elements[0].value, undefined);
+  assert.equal(decodeIssueDeleteValue(actions.elements[0].value), null);
+});
+
+test("keeps the existing issue details untouched", () => {
+  const body = (issueActions("ISSUE_DOC_ID", "U_OWNER").message.blocks[0] as unknown as { text: { text: string } }).text.text;
+
+  assert.match(body, /\*Owner issue:\* <@U_OWNER>/);
+  assert.match(body, /\*Problem:\* build พัง/);
+  assert.match(body, /\*Ask:\* <@U_ASK>/);
 });

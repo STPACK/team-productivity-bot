@@ -44,7 +44,10 @@ export function createDailyMessage(submission: DailySubmission) {
   };
 }
 
-export function createIssueMessage(submission: IssueSubmission) {
+export function createIssueMessage(
+  submission: IssueSubmission,
+  issueId: string,
+) {
   const {
     problem,
     blocking,
@@ -69,6 +72,31 @@ export function createIssueMessage(submission: IssueSubmission) {
           type: "mrkdwn",
           text: `*Owner issue:* <@${userId}>\n*Problem:* ${escapeMrkdwn(problem)}\n*Blocking:* ${escapeMrkdwn(blocking)}\n*Ask:* ${askMentions}\n*Need:* ${escapeMrkdwn(need)}\n*Time:* ${minutes ?? "-"} นาที${noteText}\n`,
         },
+      },
+      {
+        type: "actions",
+        block_id: "issue_actions",
+        elements: [
+          {
+            type: "button",
+            action_id: "issue_delete",
+            style: "danger",
+            text: { type: "plain_text", text: "Delete" },
+            // Owner id and Firestore row id both ride along, so the click can be
+            // authorised and the record located without another lookup.
+            value: encodeIssueDeleteValue(userId, issueId),
+            confirm: {
+              title: { type: "plain_text", text: "ลบ issue นี้" },
+              text: {
+                type: "plain_text",
+                text: "ข้อความนี้และข้อมูลใน dashboard จะถูกลบ กู้คืนไม่ได้",
+              },
+              confirm: { type: "plain_text", text: "ลบ" },
+              deny: { type: "plain_text", text: "ยกเลิก" },
+              style: "danger",
+            },
+          },
+        ],
       },
     ] satisfies SlackBlock[],
   };
@@ -196,11 +224,26 @@ type PrActionsBlock = {
 };
 
 // Fails closed: an absent owner id on the button means nobody is allowed to delete.
-export function canDeletePrMessage(
-  deleteButtonValue: string | undefined,
+export function isMessageOwner(
+  ownerUserId: string | undefined,
   clickedByUserId: string | undefined,
 ) {
-  return Boolean(deleteButtonValue) && deleteButtonValue === clickedByUserId;
+  return Boolean(ownerUserId) && ownerUserId === clickedByUserId;
+}
+
+// ponytail: ":" separates the two fields because neither a Slack user id
+// ([A-Z0-9]) nor a Firestore auto-id ([A-Za-z0-9]) can contain one.
+export function encodeIssueDeleteValue(
+  ownerUserId: string | undefined,
+  issueId: string,
+) {
+  return ownerUserId && issueId ? `${ownerUserId}:${issueId}` : undefined;
+}
+
+export function decodeIssueDeleteValue(value: string | undefined) {
+  const [ownerUserId, issueId] = value?.split(":") ?? [];
+
+  return ownerUserId && issueId ? { ownerUserId, issueId } : null;
 }
 
 export function createPrMergedUpdate(
