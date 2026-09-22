@@ -5,8 +5,25 @@ import type {
   SlackBlock,
 } from "@/models/slack-api";
 
-export function encodeWatcherUserIds(userIds: string[]) {
-  return userIds.join(",") || undefined;
+// ponytail: the watcher list rides in the Merged button's `value`, which Slack caps
+// at 2000 chars — roughly 165 ids. 100 leaves headroom for the prefix and longer
+// ids, and the modal rejects anything above it so a big channel cannot silently
+// push chat.postMessage over the limit and lose the whole message.
+export const MAX_WATCHER_COUNT = 100;
+
+// Values are "<action>:<field>:<field>...". ":" is a safe separator because
+// neither a Slack user id ([A-Z0-9]) nor a Firestore auto-id ([A-Za-z0-9]) contains one.
+export function encodeActionValue(
+  action: string,
+  ...fields: (string | undefined)[]
+) {
+  return [action, ...fields.map((field) => field ?? "")].join(":");
+}
+
+export function decodeActionValue(value: string | undefined) {
+  const [action, ...fields] = value?.split(":") ?? [];
+
+  return action ? { action, fields } : null;
 }
 
 export function decodeWatcherUserIds(value: string | undefined) {
@@ -74,11 +91,17 @@ export function createIssueMessage(
         block_id: "issue_actions",
         elements: [
           {
-            type: "button",
-            action_id: "issue_delete",
-            style: "danger",
-            text: { type: "plain_text", text: "Delete" },
-            value: encodeIssueDeleteValue(userId, issueId),
+            type: "overflow",
+            action_id: "issue_overflow",
+            options: [
+              {
+                text: { type: "plain_text", text: "Delete" },
+                // Owner id and Firestore row id both ride along, so the click can
+                // be authorised and the record located without another lookup.
+                value: encodeActionValue("delete", userId, issueId),
+              },
+            ],
+            // Only one option here, so this dialog speaks for Delete alone.
             confirm: {
               title: { type: "plain_text", text: "ลบ issue นี้" },
               text: {
@@ -153,14 +176,20 @@ export function createPrMessage(submission: PrSubmission) {
             action_id: "pr_merged",
             style: "primary",
             text: { type: "plain_text", text: "Merged" },
-            value: encodeWatcherUserIds(watcherUserIds),
+            // Watchers are deliberately absent from the text above and travel here
+            // instead, so nobody is pinged until this is pressed.
+            value: encodeActionValue("merged", watcherUserIds.join(",")),
           },
           {
-            type: "button",
-            action_id: "pr_delete",
-            style: "danger",
-            text: { type: "plain_text", text: "Delete" },
-            value: userId,
+            type: "overflow",
+            action_id: "pr_overflow",
+            options: [
+              {
+                text: { type: "plain_text", text: "Delete" },
+                value: encodeActionValue("delete", userId),
+              },
+            ],
+            // Delete is the only option here, so this dialog speaks for it alone.
             confirm: {
               title: { type: "plain_text", text: "ลบข้อความนี้" },
               text: {
@@ -178,10 +207,7 @@ export function createPrMessage(submission: PrSubmission) {
   };
 }
 
-export function createPrMergedMessage(
-  watcherUserIds: string[],
-  mergedByUserId: string | undefined,
-) {
+export function createPrMergedMessage(watcherUserIds: string[]) {
   const watchers = watcherUserIds
     .map((watcherId) => `<@${watcherId}>`)
     .join(", ");
@@ -197,9 +223,14 @@ export function createPrMergedMessage(
   };
 }
 
+type PrActionElement = {
+  type?: string;
+  action_id?: string;
+};
+
 type PrActionsBlock = {
   block_id?: string;
-  elements?: { action_id?: string }[];
+  elements?: PrActionElement[];
 };
 
 export function isMessageOwner(
@@ -209,19 +240,6 @@ export function isMessageOwner(
   return Boolean(ownerUserId) && ownerUserId === clickedByUserId;
 }
 
-export function encodeIssueDeleteValue(
-  ownerUserId: string | undefined,
-  issueId: string,
-) {
-  return ownerUserId && issueId ? `${ownerUserId}:${issueId}` : undefined;
-}
-
-export function decodeIssueDeleteValue(value: string | undefined) {
-  const [ownerUserId, issueId] = value?.split(":") ?? [];
-
-  return ownerUserId && issueId ? { ownerUserId, issueId } : null;
-}
-
 export function createPrMergedUpdate(
   message: { text?: string; blocks?: SlackBlock[] },
   mergedByUserId: string | undefined,
@@ -229,10 +247,11 @@ export function createPrMergedUpdate(
   const originalBlocks = message.blocks ?? [];
   const isActions = (block: SlackBlock) =>
     (block as PrActionsBlock).block_id === "pr_actions";
-
-  const deleteButton = (
-    originalBlocks.find(isActions) as PrActionsBlock | undefined
-  )?.elements?.find((element) => element.action_id === "pr_delete");
+  // Dropping the Merged button is what makes the merge single-use. Everything else
+  // is reused verbatim so the Delete overflow keeps the owner id in its option.
+  const remainingElements = (
+    (originalBlocks.find(isActions) as PrActionsBlock | undefined)?.elements ?? []
+  ).filter((element) => element.action_id !== "pr_merged");
   const mergedBy = mergedByUserId ? ` โดย <@${mergedByUserId}>` : "";
 
   const blocks: SlackBlock[] = [
@@ -246,11 +265,13 @@ export function createPrMergedUpdate(
     },
   ];
 
-  if (deleteButton) {
+  // Slack rejects an actions block with no elements, so it goes away entirely
+  // once nothing is left to offer.
+  if (remainingElements.length) {
     blocks.push({
       type: "actions",
       block_id: "pr_actions",
-      elements: [deleteButton],
+      elements: remainingElements,
     });
   }
 

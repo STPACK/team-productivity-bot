@@ -5,9 +5,10 @@ import {
   createPrMergedMessage,
   createPrMergedUpdate,
   createPrMessage,
-  decodeIssueDeleteValue,
+  decodeActionValue,
   decodeWatcherUserIds,
   isMessageOwner,
+  MAX_WATCHER_COUNT,
 } from "@/libs/messages";
 import type {
   DailySubmission,
@@ -217,6 +218,18 @@ function handlePrSubmission(payload: SlackInteractionPayload) {
     });
   }
 
+  const watcherUserIds =
+    getInput(payload, "watcher", "watcher_select")?.selected_users ?? [];
+
+  if (watcherUserIds.length > MAX_WATCHER_COUNT) {
+    return Response.json({
+      response_action: "errors",
+      errors: {
+        watcher: `เลือก watcher ได้ไม่เกิน ${MAX_WATCHER_COUNT} คน`,
+      },
+    });
+  }
+
   const submission: PrSubmission = {
     channel: getChannelContext(payload),
     ...getSubmissionIdentity(payload),
@@ -226,8 +239,7 @@ function handlePrSubmission(payload: SlackInteractionPayload) {
     prUrl,
     reviewerUserIds:
       getInput(payload, "reviewer", "reviewer_select")?.selected_users ?? [],
-    watcherUserIds:
-      getInput(payload, "watcher", "watcher_select")?.selected_users ?? [],
+    watcherUserIds,
   };
 
   runAfterResponse(() => publishPr(submission));
@@ -246,88 +258,88 @@ function handleMessageAction(payload: SlackInteractionPayload) {
   }
 
   const clickedByUserId = payload.user?.id;
+  const selected = decodeActionValue(action.selected_option?.value ?? action.value);
 
-  switch (action.action_id) {
-    case "pr_merged": {
-      const watcherUserIds = decodeWatcherUserIds(action.value);
-
-      runAfterResponse(async () => {
-        const tasks = [
-          // Dropping the Merged button is what makes this single-use, and the
-          // ✅ marker it leaves behind is what tells the channel the PR is in.
-          // ponytail: two clicks in the same instant can still both land — a lock
-          // would cost more than the stray thread reply it would prevent.
-          updateSlackMessage(
-            channelId,
-            messageTs,
-            createPrMergedUpdate(payload.message ?? {}, clickedByUserId),
-          ),
-        ];
-
-        // With nobody to mention, the ✅ marker above already says it all and a
-        // thread reply would just be noise.
-        if (watcherUserIds.length) {
-          tasks.push(
-            postSlackMessage(
-              channelId,
-              createPrMergedMessage(watcherUserIds, clickedByUserId),
-              messageTs,
-            ),
-          );
-        }
-
-        await Promise.all(tasks);
-      });
-
-      return new Response(null, { status: 200 });
-    }
-    case "pr_delete":
-      if (!isMessageOwner(action.value, clickedByUserId)) {
-        if (clickedByUserId) {
-          runAfterResponse(() =>
-            postSlackEphemeral(
-              channelId,
-              clickedByUserId,
-              "ลบได้เฉพาะเจ้าของ PR เท่านั้น",
-            ),
-          );
-        }
-
-        return new Response(null, { status: 200 });
-      }
-
-      runAfterResponse(() => deleteSlackMessage(channelId, messageTs));
-
-      return new Response(null, { status: 200 });
-    case "issue_delete": {
-      const target = decodeIssueDeleteValue(action.value);
-
-      if (!target || !isMessageOwner(target.ownerUserId, clickedByUserId)) {
-        if (clickedByUserId) {
-          runAfterResponse(() =>
-            postSlackEphemeral(
-              channelId,
-              clickedByUserId,
-              "ลบได้เฉพาะเจ้าของ issue เท่านั้น",
-            ),
-          );
-        }
-
-        return new Response(null, { status: 200 });
-      }
-
-      runAfterResponse(async () => {
-        await Promise.all([
-          deleteSlackMessage(channelId, messageTs),
-          deleteIssueSubmission(channelId, target.issueId),
-        ]);
-      });
-
-      return new Response(null, { status: 200 });
-    }
-    default:
-      return new Response(null, { status: 200 });
+  if (!selected) {
+    return new Response(null, { status: 200 });
   }
+
+  const rejectNonOwner = (what: string) => {
+    if (clickedByUserId) {
+      runAfterResponse(() =>
+        postSlackEphemeral(
+          channelId,
+          clickedByUserId,
+          `ลบได้เฉพาะเจ้าของ ${what} เท่านั้น`,
+        ),
+      );
+    }
+
+    return new Response(null, { status: 200 });
+  };
+
+  if (action.action_id === "pr_merged" && selected.action === "merged") {
+    const watcherUserIds = decodeWatcherUserIds(selected.fields[0]);
+
+    runAfterResponse(async () => {
+      const tasks = [
+        // The ✅ marker this leaves behind is what tells the channel the PR is in,
+        // and it is also what removes the Merged option from the menu.
+        // ponytail: two picks in the same instant can still both land — a lock
+        // would cost more than the stray thread reply it would prevent.
+        updateSlackMessage(
+          channelId,
+          messageTs,
+          createPrMergedUpdate(payload.message ?? {}, clickedByUserId),
+        ),
+      ];
+
+      // With nobody to mention, the ✅ marker above already says it all and a
+      // thread reply would just be noise.
+      if (watcherUserIds.length) {
+        tasks.push(
+          postSlackMessage(
+            channelId,
+            createPrMergedMessage(watcherUserIds),
+            messageTs,
+          ),
+        );
+      }
+
+      await Promise.all(tasks);
+    });
+
+    return new Response(null, { status: 200 });
+  }
+
+  if (action.action_id === "pr_overflow" && selected.action === "delete") {
+    if (!isMessageOwner(selected.fields[0], clickedByUserId)) {
+      return rejectNonOwner("PR");
+    }
+
+    runAfterResponse(() => deleteSlackMessage(channelId, messageTs));
+
+    return new Response(null, { status: 200 });
+  }
+
+  if (action.action_id === "issue_overflow" && selected.action === "delete") {
+    const [ownerUserId, issueId] = selected.fields;
+
+    if (!issueId || !isMessageOwner(ownerUserId, clickedByUserId)) {
+      return rejectNonOwner("issue");
+    }
+
+    runAfterResponse(async () => {
+      await Promise.all([
+        deleteSlackMessage(channelId, messageTs),
+        deleteIssueSubmission(channelId, issueId),
+      ]);
+    });
+
+    return new Response(null, { status: 200 });
+  }
+
+  return new Response(null, { status: 200 });
 }
 
 export async function handleSlackInteraction(request: Request) {

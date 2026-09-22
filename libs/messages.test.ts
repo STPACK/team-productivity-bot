@@ -5,11 +5,11 @@ import {
   createPrMergedMessage,
   createPrMergedUpdate,
   createPrMessage,
-  decodeIssueDeleteValue,
+  decodeActionValue,
   decodeWatcherUserIds,
-  encodeIssueDeleteValue,
-  encodeWatcherUserIds,
+  encodeActionValue,
   isMessageOwner,
+  MAX_WATCHER_COUNT,
 } from "./messages.ts";
 import type { PrSubmission } from "@/models/slack-api";
 
@@ -153,25 +153,52 @@ test("escapes a label that tries to close the link early", () => {
   assert.match(body, /\|a&gt;b &lt;@U999&gt;>/);
 });
 
-function actionsBlock(watcherUserIds: string[]) {
-  return createPrMessage(prSubmission({ watcherUserIds })).blocks[1] as {
-    type: string;
-    elements: {
-      action_id: string;
-      value?: string;
-      style?: string;
-      confirm?: unknown;
-    }[];
-  };
+type OverflowBlock = {
+  type: string;
+  block_id?: string;
+  elements: {
+    type?: string;
+    action_id?: string;
+    style?: string;
+    value?: string;
+    text?: { text: string };
+    options?: { text: { text: string }; value?: string }[];
+    confirm?: unknown;
+  }[];
+};
+
+function prActions(watcherUserIds: string[]) {
+  return createPrMessage(prSubmission({ watcherUserIds }))
+    .blocks[1] as OverflowBlock;
 }
 
-test("adds exactly the Merged and Delete buttons", () => {
-  const block = actionsBlock([]);
+function prMergedButton(watcherUserIds: string[]) {
+  return prActions(watcherUserIds).elements.find(
+    (element) => element.action_id === "pr_merged",
+  );
+}
+
+function prDeleteOption(watcherUserIds: string[]) {
+  return prActions(watcherUserIds)
+    .elements.find((element) => element.action_id === "pr_overflow")
+    ?.options?.[0];
+}
+
+test("keeps Merged as a button and puts Delete in the overflow", () => {
+  const block = prActions([]);
 
   assert.equal(block.type, "actions");
   assert.deepEqual(
-    block.elements.map((element) => element.action_id),
-    ["pr_merged", "pr_delete"],
+    block.elements.map((element) => [element.type, element.action_id]),
+    [
+      ["button", "pr_merged"],
+      ["overflow", "pr_overflow"],
+    ],
+  );
+  assert.equal(block.elements[0].text?.text, "Merged");
+  assert.deepEqual(
+    block.elements[1].options?.map((option) => option.text.text),
+    ["Delete"],
   );
 });
 
@@ -188,54 +215,49 @@ test("never mentions watchers in the posted message", () => {
 });
 
 test("carries the watchers on the Merged button instead", () => {
-  const [merged] = actionsBlock(["U_WATCH1", "U_WATCH2"]).elements;
+  const merged = prMergedButton(["U_WATCH1", "U_WATCH2"]);
 
-  assert.equal(merged.value, "U_WATCH1,U_WATCH2");
+  assert.deepEqual(
+    decodeWatcherUserIds(decodeActionValue(merged?.value)?.fields[0]),
+    ["U_WATCH1", "U_WATCH2"],
+  );
 });
 
-test("leaves the Merged button without a value when nobody is watching", () => {
-  const [merged] = actionsBlock([]).elements;
+test("keeps the Merged button usable when nobody is watching", () => {
+  const merged = prMergedButton([]);
 
-  assert.equal(merged.value, undefined);
+  assert.equal(merged?.value, "merged:");
+  assert.deepEqual(
+    decodeWatcherUserIds(decodeActionValue(merged?.value)?.fields[0]),
+    [],
+  );
 });
 
-test("guards Delete behind a confirmation dialog", () => {
-  const [, remove] = actionsBlock([]).elements;
+test("keeps a full watcher list inside Slack's 2000 char button cap", () => {
+  const userIds = Array.from(
+    { length: MAX_WATCHER_COUNT },
+    (_, index) => `U${String(index).padStart(10, "0")}`,
+  );
 
-  assert.equal(remove.style, "danger");
-  assert.ok(remove.confirm, "Delete must ask before destroying the thread");
+  assert.ok(
+    (prMergedButton(userIds)?.value ?? "").length <= 2000,
+    `${MAX_WATCHER_COUNT} watchers must still fit in a button value`,
+  );
+});
+
+test("guards the Delete overflow behind a confirmation dialog", () => {
+  assert.ok(
+    prActions([]).elements[1].confirm,
+    "picking Delete must ask before destroying the thread",
+  );
 });
 
 test("mentions every watcher in the merged thread reply", () => {
-  const { text, blocks } = createPrMergedMessage(["U_W1", "U_W2"], "U_MERGER");
+  const { text, blocks } = createPrMergedMessage(["U_W1", "U_W2"]);
   const body = (blocks[0] as { text: { text: string } }).text.text;
 
-  assert.match(body, /\*Merged\* โดย <@U_MERGER>/);
-  assert.match(body, /<@U_W1>, <@U_W2>/);
+  assert.equal(body, "*Already merged* <@U_W1>, <@U_W2>");
   assert.match(text, /<@U_W1>, <@U_W2>/);
-});
-
-test("omits the merger when Slack did not say who clicked", () => {
-  const body = (
-    createPrMergedMessage(["U_W1"], undefined).blocks[0] as {
-      text: { text: string };
-    }
-  ).text.text;
-
-  assert.equal(body, "*Merged*\n<@U_W1>");
-});
-
-test("round-trips watcher ids through the button value", () => {
-  const userIds = ["U012ABCDEF", "U345GHIJKL"];
-
-  assert.equal(encodeWatcherUserIds(userIds), "U012ABCDEF,U345GHIJKL");
-  assert.deepEqual(decodeWatcherUserIds(encodeWatcherUserIds(userIds)), userIds);
-});
-
-test("omits the button value entirely when there are no watchers", () => {
-  // Slack rejects an empty string value, so it has to be absent rather than "".
-  assert.equal(encodeWatcherUserIds([]), undefined);
-  assert.deepEqual(decodeWatcherUserIds(undefined), []);
 });
 
 test("decodes defensively around stray separators and spacing", () => {
@@ -243,14 +265,7 @@ test("decodes defensively around stray separators and spacing", () => {
   assert.deepEqual(decodeWatcherUserIds(""), []);
 });
 
-test("stays inside Slack's 2000 char button value cap for a big channel", () => {
-  const userIds = Array.from({ length: 166 }, (_, i) => `U${String(i).padStart(10, "0")}`);
 
-  assert.ok(
-    (encodeWatcherUserIds(userIds) ?? "").length <= 2000,
-    "166 watchers should still fit",
-  );
-});
 
 test("only the owner may delete", () => {
   assert.equal(isMessageOwner("U_OWNER", "U_OWNER"), true);
@@ -265,10 +280,8 @@ test("nobody may delete when the owner id is missing or unknown", () => {
   assert.equal(isMessageOwner(undefined, undefined), false);
 });
 
-test("the Delete button carries the owner id", () => {
-  const [, remove] = actionsBlock([]).elements;
-
-  assert.equal(remove.value, "U1");
+test("the Delete option carries the owner id", () => {
+  assert.equal(decodeActionValue(prDeleteOption([])?.value)?.fields[0], "U1");
 });
 
 function mergedBlocks(mergedBy: string | undefined = "U_MERGER") {
@@ -277,24 +290,53 @@ function mergedBlocks(mergedBy: string | undefined = "U_MERGER") {
   return createPrMergedUpdate(posted, mergedBy).blocks as {
     type: string;
     block_id?: string;
-    elements?: { action_id?: string; value?: string; text?: { text: string } }[];
+    elements?: {
+      action_id?: string;
+      options?: { text: { text: string }; value?: string }[];
+      text?: string;
+    }[];
   }[];
 }
 
-test("removes the Merged button so it cannot be clicked twice", () => {
+test("removes the Merged button so it cannot be pressed twice", () => {
   const actions = mergedBlocks().find((block) => block.block_id === "pr_actions");
 
   assert.deepEqual(
     actions?.elements?.map((element) => element.action_id),
-    ["pr_delete"],
-    "only Delete should remain",
+    ["pr_overflow"],
+    "only the Delete overflow should remain",
   );
 });
 
 test("keeps Delete working after a merge by preserving its owner value", () => {
   const actions = mergedBlocks().find((block) => block.block_id === "pr_actions");
+  const remove = actions?.elements?.[0].options?.[0];
 
-  assert.equal(actions?.elements?.[0].value, "U1");
+  assert.equal(decodeActionValue(remove?.value)?.fields[0], "U1");
+});
+
+test("drops the whole actions block when a merge leaves nothing behind", () => {
+  const { blocks } = createPrMergedUpdate(
+    {
+      text: "x",
+      blocks: [
+        {
+          type: "actions",
+          block_id: "pr_actions",
+          elements: [
+            { type: "button", action_id: "pr_merged", value: "merged:" },
+          ],
+        },
+      ],
+    },
+    "U_MERGER",
+  );
+
+  // Slack rejects an actions block with zero elements, so it must go entirely.
+  assert.deepEqual(
+    blocks.map((block) => (block as { block_id?: string }).block_id),
+    ["pr_merged_marker"],
+  );
 });
 
 test("leaves a merged marker naming who merged it", () => {
@@ -304,7 +346,7 @@ test("leaves a merged marker naming who merged it", () => {
 
   assert.equal(marker?.type, "context");
   assert.match(
-    (marker?.elements?.[0] as unknown as { text: string }).text,
+    marker?.elements?.[0].text ?? "",
     /:white_check_mark: \*Merged\* โดย <@U_MERGER>/,
   );
 });
@@ -351,63 +393,62 @@ function issueActions(issueId: string, userId: string | undefined) {
     issueId,
   );
 
-  return {
-    message,
-    actions: message.blocks[1] as {
-      type: string;
-      block_id?: string;
-      elements: { action_id: string; value?: string; style?: string; confirm?: unknown }[];
-    },
-  };
+  return { message, actions: message.blocks[1] as OverflowBlock };
 }
 
-test("round-trips the issue owner and row id through the button value", () => {
-  const value = encodeIssueDeleteValue("U_OWNER", "ISSUE_DOC_ID");
-
-  assert.equal(value, "U_OWNER:ISSUE_DOC_ID");
-  assert.deepEqual(decodeIssueDeleteValue(value), {
-    ownerUserId: "U_OWNER",
-    issueId: "ISSUE_DOC_ID",
+test("round-trips an action and its fields through an option value", () => {
+  assert.equal(
+    encodeActionValue("delete", "U_OWNER", "ROW123"),
+    "delete:U_OWNER:ROW123",
+  );
+  assert.deepEqual(decodeActionValue("delete:U_OWNER:ROW123"), {
+    action: "delete",
+    fields: ["U_OWNER", "ROW123"],
   });
 });
 
-test("refuses to encode or decode a half-filled issue delete value", () => {
-  assert.equal(encodeIssueDeleteValue(undefined, "ISSUE_DOC_ID"), undefined);
-  assert.equal(encodeIssueDeleteValue("U_OWNER", ""), undefined);
-  assert.equal(decodeIssueDeleteValue(undefined), null);
-  assert.equal(decodeIssueDeleteValue(""), null);
-  assert.equal(decodeIssueDeleteValue("U_OWNER"), null);
-  assert.equal(decodeIssueDeleteValue(":ISSUE_DOC_ID"), null);
-  assert.equal(decodeIssueDeleteValue("U_OWNER:"), null);
+test("encodes a missing field as empty rather than dropping it", () => {
+  // Keeps field positions stable so fields[1] is always the row id.
+  assert.equal(encodeActionValue("delete", undefined, "ROW123"), "delete::ROW123");
+  assert.deepEqual(decodeActionValue("delete::ROW123")?.fields, ["", "ROW123"]);
 });
 
-test("gives the issue message a single confirmed Delete button", () => {
+test("decodes nothing from an absent value", () => {
+  assert.equal(decodeActionValue(undefined), null);
+  assert.equal(decodeActionValue(""), null);
+});
+
+test("gives the issue message a single confirmed Delete option", () => {
   const { actions } = issueActions("ISSUE_DOC_ID", "U_OWNER");
 
   assert.equal(actions.type, "actions");
   assert.equal(actions.block_id, "issue_actions");
+  assert.equal(actions.elements[0].type, "overflow");
+  assert.equal(actions.elements[0].action_id, "issue_overflow");
   assert.deepEqual(
-    actions.elements.map((element) => element.action_id),
-    ["issue_delete"],
+    actions.elements[0].options?.map((option) => option.text.text),
+    ["Delete"],
   );
-  assert.equal(actions.elements[0].style, "danger");
   assert.ok(actions.elements[0].confirm, "deleting a stored row must be confirmed");
 });
 
 test("carries both ids so the row can be found and the click authorised", () => {
   const { actions } = issueActions("ROW123", "U_OWNER");
-  const target = decodeIssueDeleteValue(actions.elements[0].value);
+  const [ownerUserId, issueId] =
+    decodeActionValue(actions.elements[0].options?.[0].value)?.fields ?? [];
 
-  assert.equal(target?.issueId, "ROW123");
-  assert.equal(isMessageOwner(target?.ownerUserId, "U_OWNER"), true);
-  assert.equal(isMessageOwner(target?.ownerUserId, "U_ASK"), false);
+  assert.equal(issueId, "ROW123");
+  assert.equal(isMessageOwner(ownerUserId, "U_OWNER"), true);
+  assert.equal(isMessageOwner(ownerUserId, "U_ASK"), false);
 });
 
-test("leaves the issue Delete button inert when the owner is unknown", () => {
+test("leaves the issue Delete option inert when the owner is unknown", () => {
   const { actions } = issueActions("ROW123", undefined);
+  const [ownerUserId] =
+    decodeActionValue(actions.elements[0].options?.[0].value)?.fields ?? [];
 
-  assert.equal(actions.elements[0].value, undefined);
-  assert.equal(decodeIssueDeleteValue(actions.elements[0].value), null);
+  assert.equal(ownerUserId, "");
+  assert.equal(isMessageOwner(ownerUserId, "U_ANYONE"), false);
 });
 
 test("keeps the existing issue details untouched", () => {

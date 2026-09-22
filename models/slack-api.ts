@@ -45,6 +45,9 @@ export type SlackInteractionPayload = {
   actions?: {
     action_id?: string;
     value?: string;
+    selected_option?: {
+      value?: string;
+    };
   }[];
   view?: {
     callback_id?: string;
