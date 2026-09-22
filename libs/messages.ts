@@ -17,6 +17,7 @@ export const PR_PRIORITIES = [
     label: "Normal",
     note: "ไม่รีบ",
     sla: "Review by this evening",
+    prominent: false,
   },
   {
     value: "attention",
@@ -24,6 +25,7 @@ export const PR_PRIORITIES = [
     label: "Attention",
     note: "ภายในเย็นวันนี้",
     sla: "Review within a few hours",
+    prominent: false,
   },
   {
     value: "urgent",
@@ -31,6 +33,7 @@ export const PR_PRIORITIES = [
     label: "Urgent",
     note: "ภายใน 1 ชม",
     sla: "Review as soon as possible",
+    prominent: true,
   },
   {
     value: "critical",
@@ -38,6 +41,7 @@ export const PR_PRIORITIES = [
     label: "Critical",
     note: "ไวที่สุดเท่าที่จะเป็นได้",
     sla: "Review immediately — blocking release, hotfix, or production",
+    prominent: true,
   },
 ] as const satisfies readonly {
   value: PrPriority;
@@ -45,6 +49,8 @@ export const PR_PRIORITIES = [
   label: string;
   note: string;
   sla: string;
+  // Loud levels earn their own header block; quiet ones fold into existing lines.
+  prominent: boolean;
 }[];
 
 export const DEFAULT_PR_PRIORITY: PrPriority = "normal";
@@ -209,61 +215,82 @@ export function createPrMessage(submission: PrSubmission) {
   const reviewers =
     reviewerUserIds.map((reviewerId) => `<@${reviewerId}>`).join(", ") || "-";
 
+  // A routine request folds the level into lines that already exist, so it stays four
+  // lines with only the coloured dot to catch the eye. Urgent and critical get their
+  // own header block and the deadline spelled out, so they cannot be scrolled past.
+  const deadlineLine = level.prominent ? `_${level.sla}_\n` : "";
+  const ownerLine = level.prominent
+    ? `*Owner PR:* <@${userId}>`
+    : `${level.emoji} *Owner PR:* <@${userId}>`;
+  const reviewerLine = level.prominent
+    ? `*Reviewer:* ${reviewers}`
+    : `*Reviewer:* ${reviewers} · *${level.label}* — ${level.note}`;
+
+  const blocks: SlackBlock[] = [];
+
+  if (level.prominent) {
+    blocks.push({
+      type: "header",
+      block_id: "pr_priority",
+      text: {
+        type: "plain_text",
+        emoji: true,
+        text: `${level.emoji} ${level.label}`,
+      },
+    });
+  }
+
+  blocks.push(
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        // prUrl is posted bare so Slack autolinks and unfurls it. Everything the
+        // user typed goes through escapeMrkdwn.
+        text: `${deadlineLine}${ownerLine}\n*Ticket:* ${formatTicketLinks(ticketLinks)}\n*PR:* ${escapeMrkdwn(prUrl)}\n${reviewerLine}\n`,
+      },
+    },
+    {
+      type: "actions",
+      block_id: "pr_actions",
+      elements: [
+        {
+          type: "button",
+          action_id: "pr_merged",
+          style: "primary",
+          text: { type: "plain_text", text: "Merged" },
+          // Watchers are deliberately absent from the text above and travel here
+          // instead, so nobody is pinged until this is pressed.
+          value: encodeActionValue("merged", watcherUserIds.join(",")),
+        },
+        {
+          type: "overflow",
+          action_id: "pr_overflow",
+          options: [
+            {
+              text: { type: "plain_text", text: "Delete" },
+              value: encodeActionValue("delete", userId),
+            },
+          ],
+          // Delete is the only option here, so this dialog speaks for it alone.
+          confirm: {
+            title: { type: "plain_text", text: "ลบข้อความนี้" },
+            text: {
+              type: "plain_text",
+              text: "ข้อความนี้และ reply ทั้ง thread จะถูกลบ กู้คืนไม่ได้",
+            },
+            confirm: { type: "plain_text", text: "ลบ" },
+            deny: { type: "plain_text", text: "ยกเลิก" },
+            style: "danger",
+          },
+        },
+      ],
+    },
+  );
+
   return {
     text: `[${level.label}] ขอรีวิว PR: ${prUrl} | Reviewer: ${reviewers}`,
-    blocks: [
-      // A header block is the loudest thing Slack renders, which is what makes the
-      // level readable at a glance while scrolling a busy channel.
-      {
-        type: "header",
-        block_id: "pr_priority",
-        text: {
-          type: "plain_text",
-          emoji: true,
-          text: `${level.emoji} ${level.label}`,
-        },
-      },
-      {
-        type: "section",
-        text: {
-          type: "mrkdwn",
-          text: `_${level.sla}_\n*Owner PR:* <@${userId}>\n*Ticket:* ${formatTicketLinks(ticketLinks)}\n*PR:* ${escapeMrkdwn(prUrl)}\n*Reviewer:* ${reviewers}\n`,
-        },
-      },
-      {
-        type: "actions",
-        block_id: "pr_actions",
-        elements: [
-          {
-            type: "button",
-            action_id: "pr_merged",
-            style: "primary",
-            text: { type: "plain_text", text: "Merged" },
-            value: encodeActionValue("merged", watcherUserIds.join(",")),
-          },
-          {
-            type: "overflow",
-            action_id: "pr_overflow",
-            options: [
-              {
-                text: { type: "plain_text", text: "Delete" },
-                value: encodeActionValue("delete", userId),
-              },
-            ],
-            confirm: {
-              title: { type: "plain_text", text: "ลบข้อความนี้" },
-              text: {
-                type: "plain_text",
-                text: "ข้อความนี้และ reply ทั้ง thread จะถูกลบ กู้คืนไม่ได้",
-              },
-              confirm: { type: "plain_text", text: "ลบ" },
-              deny: { type: "plain_text", text: "ยกเลิก" },
-              style: "danger",
-            },
-          },
-        ],
-      },
-    ] satisfies SlackBlock[],
+    blocks,
   };
 }
 
