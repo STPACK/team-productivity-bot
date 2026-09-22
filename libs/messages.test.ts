@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createPrMessage } from "./messages.ts";
+import {
+  canDeletePrMessage,
+  createPrMergedMessage,
+  createPrMergedUpdate,
+  createPrMessage,
+  decodeWatcherUserIds,
+  encodeWatcherUserIds,
+} from "./messages.ts";
 import type { PrSubmission } from "@/models/slack-api";
 
 function prSubmission(overrides: Partial<PrSubmission> = {}): PrSubmission {
@@ -10,6 +17,7 @@ function prSubmission(overrides: Partial<PrSubmission> = {}): PrSubmission {
     ticketLinks: ["https://jira/PROJ-1"],
     prUrl: "https://github.com/org/repo/pull/7",
     reviewerUserIds: ["U2", "U3"],
+    watcherUserIds: [],
     ...overrides,
   };
 }
@@ -140,4 +148,194 @@ test("escapes a label that tries to close the link early", () => {
 
   assert.ok(!body.includes("<@U999>"), "raw mention must not survive");
   assert.match(body, /\|a&gt;b &lt;@U999&gt;>/);
+});
+
+function actionsBlock(watcherUserIds: string[]) {
+  return createPrMessage(prSubmission({ watcherUserIds })).blocks[1] as {
+    type: string;
+    elements: {
+      action_id: string;
+      value?: string;
+      style?: string;
+      confirm?: unknown;
+    }[];
+  };
+}
+
+test("adds exactly the Merged and Delete buttons", () => {
+  const block = actionsBlock([]);
+
+  assert.equal(block.type, "actions");
+  assert.deepEqual(
+    block.elements.map((element) => element.action_id),
+    ["pr_merged", "pr_delete"],
+  );
+});
+
+test("never mentions watchers in the posted message", () => {
+  const { text, blocks } = createPrMessage(
+    prSubmission({ watcherUserIds: ["U_WATCH1", "U_WATCH2"] }),
+  );
+  const body = (blocks[0] as { text: { text: string } }).text.text;
+
+  assert.ok(!body.includes("U_WATCH1"), "watcher must not appear in the body");
+  assert.ok(!body.includes("U_WATCH2"), "watcher must not appear in the body");
+  assert.ok(!text.includes("U_WATCH1"), "watcher must not appear in the fallback text");
+  assert.ok(!body.includes("Watcher"), "no watcher field should be rendered");
+});
+
+test("carries the watchers on the Merged button instead", () => {
+  const [merged] = actionsBlock(["U_WATCH1", "U_WATCH2"]).elements;
+
+  assert.equal(merged.value, "U_WATCH1,U_WATCH2");
+});
+
+test("leaves the Merged button without a value when nobody is watching", () => {
+  const [merged] = actionsBlock([]).elements;
+
+  assert.equal(merged.value, undefined);
+});
+
+test("guards Delete behind a confirmation dialog", () => {
+  const [, remove] = actionsBlock([]).elements;
+
+  assert.equal(remove.style, "danger");
+  assert.ok(remove.confirm, "Delete must ask before destroying the thread");
+});
+
+test("mentions every watcher in the merged thread reply", () => {
+  const { text, blocks } = createPrMergedMessage(["U_W1", "U_W2"], "U_MERGER");
+  const body = (blocks[0] as { text: { text: string } }).text.text;
+
+  assert.match(body, /\*Merged\* โดย <@U_MERGER>/);
+  assert.match(body, /<@U_W1>, <@U_W2>/);
+  assert.match(text, /<@U_W1>, <@U_W2>/);
+});
+
+test("still reports a merge when there are no watchers", () => {
+  const { text, blocks } = createPrMergedMessage([], "U_MERGER");
+  const body = (blocks[0] as { text: { text: string } }).text.text;
+
+  assert.equal(body, "*Merged* โดย <@U_MERGER>");
+  assert.equal(text, "Merged");
+});
+
+test("omits the merger when Slack did not say who clicked", () => {
+  const body = (
+    createPrMergedMessage(["U_W1"], undefined).blocks[0] as {
+      text: { text: string };
+    }
+  ).text.text;
+
+  assert.equal(body, "*Merged*\n<@U_W1>");
+});
+
+test("round-trips watcher ids through the button value", () => {
+  const userIds = ["U012ABCDEF", "U345GHIJKL"];
+
+  assert.equal(encodeWatcherUserIds(userIds), "U012ABCDEF,U345GHIJKL");
+  assert.deepEqual(decodeWatcherUserIds(encodeWatcherUserIds(userIds)), userIds);
+});
+
+test("omits the button value entirely when there are no watchers", () => {
+  // Slack rejects an empty string value, so it has to be absent rather than "".
+  assert.equal(encodeWatcherUserIds([]), undefined);
+  assert.deepEqual(decodeWatcherUserIds(undefined), []);
+});
+
+test("decodes defensively around stray separators and spacing", () => {
+  assert.deepEqual(decodeWatcherUserIds(" U1 , ,U2, "), ["U1", "U2"]);
+  assert.deepEqual(decodeWatcherUserIds(""), []);
+});
+
+test("stays inside Slack's 2000 char button value cap for a big channel", () => {
+  const userIds = Array.from({ length: 166 }, (_, i) => `U${String(i).padStart(10, "0")}`);
+
+  assert.ok(
+    (encodeWatcherUserIds(userIds) ?? "").length <= 2000,
+    "166 watchers should still fit",
+  );
+});
+
+test("only the PR owner may delete", () => {
+  assert.equal(canDeletePrMessage("U_OWNER", "U_OWNER"), true);
+  assert.equal(canDeletePrMessage("U_OWNER", "U_SOMEONE_ELSE"), false);
+});
+
+test("nobody may delete when the owner id is missing or unknown", () => {
+  // Fail closed rather than letting an unattributed message be deleted by anyone.
+  assert.equal(canDeletePrMessage(undefined, "U_OWNER"), false);
+  assert.equal(canDeletePrMessage("", "U_OWNER"), false);
+  assert.equal(canDeletePrMessage("U_OWNER", undefined), false);
+  assert.equal(canDeletePrMessage(undefined, undefined), false);
+});
+
+test("the Delete button carries the owner id", () => {
+  const [, remove] = actionsBlock([]).elements;
+
+  assert.equal(remove.value, "U1");
+});
+
+function mergedBlocks(mergedBy: string | undefined = "U_MERGER") {
+  const posted = createPrMessage(prSubmission({ watcherUserIds: ["U_W1"] }));
+
+  return createPrMergedUpdate(posted, mergedBy).blocks as {
+    type: string;
+    block_id?: string;
+    elements?: { action_id?: string; value?: string; text?: { text: string } }[];
+  }[];
+}
+
+test("removes the Merged button so it cannot be clicked twice", () => {
+  const actions = mergedBlocks().find((block) => block.block_id === "pr_actions");
+
+  assert.deepEqual(
+    actions?.elements?.map((element) => element.action_id),
+    ["pr_delete"],
+    "only Delete should remain",
+  );
+});
+
+test("keeps Delete working after a merge by preserving its owner value", () => {
+  const actions = mergedBlocks().find((block) => block.block_id === "pr_actions");
+
+  assert.equal(actions?.elements?.[0].value, "U1");
+});
+
+test("leaves a merged marker naming who merged it", () => {
+  const marker = mergedBlocks().find(
+    (block) => block.block_id === "pr_merged_marker",
+  );
+
+  assert.equal(marker?.type, "context");
+  assert.match(
+    (marker?.elements?.[0] as unknown as { text: string }).text,
+    /:white_check_mark: \*Merged\* โดย <@U_MERGER>/,
+  );
+});
+
+test("keeps the original PR details visible after merging", () => {
+  const body = (mergedBlocks()[0] as unknown as { text: { text: string } }).text.text;
+
+  assert.match(body, /\*Owner PR:\* <@U1>/);
+  assert.match(body, /\*PR:\* https:\/\/github\.com\/org\/repo\/pull\/7/);
+});
+
+test("marks the fallback text as merged too", () => {
+  const posted = createPrMessage(prSubmission());
+
+  assert.equal(
+    createPrMergedUpdate(posted, "U_MERGER").text,
+    `${posted.text} · Merged`,
+  );
+});
+
+test("still produces a marker when Slack sends no blocks back", () => {
+  const { blocks, text } = createPrMergedUpdate({}, "U_MERGER");
+
+  assert.equal(text, "Merged");
+  assert.deepEqual(
+    blocks.map((block) => (block as { block_id?: string }).block_id),
+    ["pr_merged_marker"],
+  );
 });

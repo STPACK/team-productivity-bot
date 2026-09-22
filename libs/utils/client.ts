@@ -61,8 +61,35 @@ export async function openSlackModal(triggerId: string, view: SlackModal) {
 export async function postSlackMessage(
   channel: string,
   message: { text: string; blocks: SlackBlock[] },
+  threadTs?: string,
 ) {
-  await callSlack("chat.postMessage", { channel, ...message });
+  // JSON.stringify drops thread_ts when it is undefined, so the same call serves
+  // both a top-level post and a threaded reply.
+  await callSlack("chat.postMessage", {
+    channel,
+    ...message,
+    thread_ts: threadTs,
+  });
+}
+
+export async function updateSlackMessage(
+  channel: string,
+  ts: string,
+  message: { text: string; blocks: SlackBlock[] },
+) {
+  await callSlack("chat.update", { channel, ts, ...message });
+}
+
+export async function deleteSlackMessage(channel: string, ts: string) {
+  await callSlack("chat.delete", { channel, ts });
+}
+
+export async function postSlackEphemeral(
+  channel: string,
+  user: string,
+  text: string,
+) {
+  await callSlack("chat.postEphemeral", { channel, user, text });
 }
 
 export async function getSlackMember(

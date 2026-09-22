@@ -2,7 +2,11 @@ import { after } from "next/server";
 import {
   createDailyMessage,
   createIssueMessage,
+  canDeletePrMessage,
+  createPrMergedMessage,
+  createPrMergedUpdate,
   createPrMessage,
+  decodeWatcherUserIds,
 } from "@/libs/messages";
 import type {
   DailySubmission,
@@ -11,8 +15,11 @@ import type {
   SlackInteractionPayload,
 } from "@/models/slack-api";
 import {
+  deleteSlackMessage,
   getSlackMember,
+  postSlackEphemeral,
   postSlackMessage,
+  updateSlackMessage,
 } from "@/libs/utils/client";
 import {
   saveDailySubmission,
@@ -213,11 +220,73 @@ function handlePrSubmission(payload: SlackInteractionPayload) {
     prUrl,
     reviewerUserIds:
       getInput(payload, "reviewer", "reviewer_select")?.selected_users ?? [],
+    watcherUserIds:
+      getInput(payload, "watcher", "watcher_select")?.selected_users ?? [],
   };
 
   runAfterResponse(() => publishPr(submission));
 
   return new Response(null, { status: 200 });
+}
+
+function handlePrAction(payload: SlackInteractionPayload) {
+  const action = payload.actions?.[0];
+  const channelId = payload.channel?.id;
+  // The button lives on the parent message, so its ts is also the thread to reply in.
+  const messageTs = payload.message?.ts;
+
+  if (!action?.action_id || !channelId || !messageTs) {
+    return new Response(null, { status: 200 });
+  }
+
+  const clickedByUserId = payload.user?.id;
+
+  switch (action.action_id) {
+    case "pr_merged":
+      runAfterResponse(async () => {
+        await Promise.all([
+          // Dropping the Merged button is what makes this single-use, and the
+          // ✅ marker it leaves behind is what tells the channel the PR is in.
+          // ponytail: two clicks in the same instant can still both land — a lock
+          // would cost more than the stray thread reply it would prevent.
+          updateSlackMessage(
+            channelId,
+            messageTs,
+            createPrMergedUpdate(payload.message ?? {}, clickedByUserId),
+          ),
+          postSlackMessage(
+            channelId,
+            createPrMergedMessage(
+              decodeWatcherUserIds(action.value),
+              clickedByUserId,
+            ),
+            messageTs,
+          ),
+        ]);
+      });
+
+      return new Response(null, { status: 200 });
+    case "pr_delete":
+      if (!canDeletePrMessage(action.value, clickedByUserId)) {
+        if (clickedByUserId) {
+          runAfterResponse(() =>
+            postSlackEphemeral(
+              channelId,
+              clickedByUserId,
+              "ลบได้เฉพาะเจ้าของ PR เท่านั้น",
+            ),
+          );
+        }
+
+        return new Response(null, { status: 200 });
+      }
+
+      runAfterResponse(() => deleteSlackMessage(channelId, messageTs));
+
+      return new Response(null, { status: 200 });
+    default:
+      return new Response(null, { status: 200 });
+  }
 }
 
 export async function handleSlackInteraction(request: Request) {
@@ -231,6 +300,10 @@ export async function handleSlackInteraction(request: Request) {
 
   if (!payload) {
     return Response.json({ error: "Invalid payload" }, { status: 400 });
+  }
+
+  if (payload.type === "block_actions") {
+    return handlePrAction(payload);
   }
 
   if (payload.type !== "view_submission") {

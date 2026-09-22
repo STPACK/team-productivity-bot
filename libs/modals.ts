@@ -181,6 +181,24 @@ export function createPrModal(metadata: SlackModalMetadata): SlackModal {
           placeholder: { type: "plain_text", text: "เลือกคนรีวิว" },
         },
       },
+      {
+        type: "input",
+        block_id: "watcher",
+        optional: true,
+        label: { type: "plain_text", text: "Watcher" },
+        hint: {
+          type: "plain_text",
+          text: "ไม่ถูก mention ตอนโพสต์ จะ mention ใน thread ตอนกด Merged",
+        },
+        element: {
+          type: "multi_users_select",
+          action_id: "watcher_select",
+          placeholder: {
+            type: "plain_text",
+            text: "เลือกคนที่ต้องการให้รู้ตอน merge",
+          },
+        },
+      },
     ],
   };
 }

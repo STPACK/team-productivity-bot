@@ -32,6 +32,20 @@ export type SlackInteractionPayload = {
     name?: string;
     username?: string;
   };
+  channel?: {
+    id?: string;
+    name?: string;
+  };
+  message?: {
+    ts?: string;
+    thread_ts?: string;
+    text?: string;
+    blocks?: SlackBlock[];
+  };
+  actions?: {
+    action_id?: string;
+    value?: string;
+  }[];
   view?: {
     callback_id?: string;
     private_metadata?: string;
@@ -103,4 +117,5 @@ export type PrSubmission = {
   ticketLinks: string[];
   prUrl: string;
   reviewerUserIds: string[];
+  watcherUserIds: string[];
 };
