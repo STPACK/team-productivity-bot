@@ -1,3 +1,5 @@
+export type PrPriority = "normal" | "attention" | "urgent" | "critical";
+
 export type SlackChannelContext = {
   channelId: string | null;
   channelName: string | null;
@@ -20,6 +22,9 @@ export type SlackBlock = Record<string, unknown>;
 
 export type SlackInputValue = {
   value?: string;
+  selected_option?: {
+    value?: string;
+  };
   selected_time?: string;
   selected_users?: string[];
   timezone?: string;
@@ -119,6 +124,7 @@ export type PrSubmission = {
   userName?: string;
   ticketLinks: string[];
   prUrl: string;
+  priority: PrPriority;
   reviewerUserIds: string[];
   watcherUserIds: string[];
 };

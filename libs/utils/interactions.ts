@@ -7,6 +7,7 @@ import {
   createPrMessage,
   decodeActionValue,
   decodeWatcherUserIds,
+  parsePrPriority,
   isMessageOwner,
   MAX_WATCHER_COUNT,
 } from "@/libs/messages";
@@ -237,6 +238,9 @@ function handlePrSubmission(payload: SlackInteractionPayload) {
       getInput(payload, "ticket_link", "ticket_link_input")?.value,
     ),
     prUrl,
+    priority: parsePrPriority(
+      getInput(payload, "priority", "priority_select")?.selected_option?.value,
+    ),
     reviewerUserIds:
       getInput(payload, "reviewer", "reviewer_select")?.selected_users ?? [],
     watcherUserIds,

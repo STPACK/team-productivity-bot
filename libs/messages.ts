@@ -1,9 +1,69 @@
 import type {
   DailySubmission,
   IssueSubmission,
+  PrPriority,
   PrSubmission,
   SlackBlock,
 } from "@/models/slack-api";
+
+// One table drives the modal's radio options and the posted message, so the level a
+// reviewer picks is the level they see. Slack caps an option's `text` and its
+// `description` at 75 chars each, which is why the Thai note sits on the label and
+// the English SLA on the description rather than both in one string.
+export const PR_PRIORITIES = [
+  {
+    value: "normal",
+    emoji: ":large_green_circle:",
+    label: "Normal",
+    note: "ไม่รีบ",
+    sla: "Review by this evening",
+  },
+  {
+    value: "attention",
+    emoji: ":large_yellow_circle:",
+    label: "Attention",
+    note: "ภายในเย็นวันนี้",
+    sla: "Review within a few hours",
+  },
+  {
+    value: "urgent",
+    emoji: ":large_orange_circle:",
+    label: "Urgent",
+    note: "ภายใน 1 ชม",
+    sla: "Review as soon as possible",
+  },
+  {
+    value: "critical",
+    emoji: ":red_circle:",
+    label: "Critical",
+    note: "ไวที่สุดเท่าที่จะเป็นได้",
+    sla: "Review immediately — blocking release, hotfix, or production",
+  },
+] as const satisfies readonly {
+  value: PrPriority;
+  emoji: string;
+  label: string;
+  note: string;
+  sla: string;
+}[];
+
+export const DEFAULT_PR_PRIORITY: PrPriority = "normal";
+
+// Falls back rather than throwing: an unknown value means Slack sent something we
+// do not model, and a review request is still worth posting at the safest level.
+export function parsePrPriority(value: string | undefined): PrPriority {
+  return (
+    PR_PRIORITIES.find((priority) => priority.value === value)?.value ??
+    DEFAULT_PR_PRIORITY
+  );
+}
+
+export function getPrPriority(value: PrPriority) {
+  return (
+    PR_PRIORITIES.find((priority) => priority.value === value) ??
+    PR_PRIORITIES[0]
+  );
+}
 
 export const MAX_WATCHER_COUNT = 100;
 
@@ -143,19 +203,31 @@ function formatTicketLinks(links: string[]) {
 }
 
 export function createPrMessage(submission: PrSubmission) {
-  const { ticketLinks, prUrl, reviewerUserIds, watcherUserIds, userId } =
+  const { ticketLinks, prUrl, priority, reviewerUserIds, watcherUserIds, userId } =
     submission;
+  const level = getPrPriority(priority);
   const reviewers =
     reviewerUserIds.map((reviewerId) => `<@${reviewerId}>`).join(", ") || "-";
 
   return {
-    text: `ขอรีวิว PR: ${prUrl} | Reviewer: ${reviewers}`,
+    text: `[${level.label}] ขอรีวิว PR: ${prUrl} | Reviewer: ${reviewers}`,
     blocks: [
+      // A header block is the loudest thing Slack renders, which is what makes the
+      // level readable at a glance while scrolling a busy channel.
+      {
+        type: "header",
+        block_id: "pr_priority",
+        text: {
+          type: "plain_text",
+          emoji: true,
+          text: `${level.emoji} ${level.label}`,
+        },
+      },
       {
         type: "section",
         text: {
           type: "mrkdwn",
-          text: `*Owner PR:* <@${userId}>\n*Ticket:* ${formatTicketLinks(ticketLinks)}\n*PR:* ${escapeMrkdwn(prUrl)}\n*Reviewer:* ${reviewers}\n`,
+          text: `_${level.sla}_\n*Owner PR:* <@${userId}>\n*Ticket:* ${formatTicketLinks(ticketLinks)}\n*PR:* ${escapeMrkdwn(prUrl)}\n*Reviewer:* ${reviewers}\n`,
         },
       },
       {

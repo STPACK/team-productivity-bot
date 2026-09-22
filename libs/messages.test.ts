@@ -7,11 +7,30 @@ import {
   createPrMessage,
   decodeActionValue,
   decodeWatcherUserIds,
+  DEFAULT_PR_PRIORITY,
   encodeActionValue,
   isMessageOwner,
   MAX_WATCHER_COUNT,
+  parsePrPriority,
+  PR_PRIORITIES,
 } from "./messages.ts";
 import type { PrSubmission } from "@/models/slack-api";
+
+type AnyBlock = {
+  type?: string;
+  block_id?: string;
+  text?: { text: string };
+};
+
+function blockOfType(message: { blocks: unknown[] }, type: string) {
+  return message.blocks.find((block) => (block as AnyBlock).type === type) as
+    | AnyBlock
+    | undefined;
+}
+
+function prBody(message: { blocks: unknown[] }) {
+  return blockOfType(message, "section")?.text?.text ?? "";
+}
 
 function prSubmission(overrides: Partial<PrSubmission> = {}): PrSubmission {
   return {
@@ -19,6 +38,7 @@ function prSubmission(overrides: Partial<PrSubmission> = {}): PrSubmission {
     userId: "U1",
     ticketLinks: ["https://jira/PROJ-1"],
     prUrl: "https://github.com/org/repo/pull/7",
+    priority: "normal",
     reviewerUserIds: ["U2", "U3"],
     watcherUserIds: [],
     ...overrides,
@@ -26,8 +46,9 @@ function prSubmission(overrides: Partial<PrSubmission> = {}): PrSubmission {
 }
 
 test("mentions the owner and every reviewer", () => {
-  const { text, blocks } = createPrMessage(prSubmission());
-  const body = (blocks[0] as { text: { text: string } }).text.text;
+  const message = createPrMessage(prSubmission());
+  const { text } = message;
+  const body = prBody(message);
 
   assert.match(body, /\*Owner PR:\* <@U1>/);
   assert.match(body, /\*Reviewer:\* <@U2>, <@U3>/);
@@ -35,7 +56,7 @@ test("mentions the owner and every reviewer", () => {
 });
 
 test("posts the PR URL bare so Slack can autolink and unfurl it", () => {
-  const body = (createPrMessage(prSubmission()).blocks[0] as { text: { text: string } }).text.text;
+  const body = prBody(createPrMessage(prSubmission()));
 
   assert.match(body, /\*PR:\* https:\/\/github\.com\/org\/repo\/pull\/7\n/);
 });
@@ -45,42 +66,32 @@ test("posts a GitLab or Azure PR URL unchanged", () => {
     "https://gitlab.com/group/project/-/merge_requests/42",
     "https://dev.azure.com/org/project/_git/repo/pullrequest/42",
   ]) {
-    const body = (
-      createPrMessage(prSubmission({ prUrl })).blocks[0] as { text: { text: string } }
-    ).text.text;
+    const body = prBody(createPrMessage(prSubmission({ prUrl })));
 
     assert.ok(body.includes(prUrl), `${prUrl} should appear verbatim`);
   }
 });
 
 test("lists multiple tickets as bullets and a single one inline", () => {
-  const one = (createPrMessage(prSubmission()).blocks[0] as { text: { text: string } }).text.text;
+  const one = prBody(createPrMessage(prSubmission()));
   assert.match(one, /\*Ticket:\* https:\/\/jira\/PROJ-1\n/);
 
-  const many = (
-    createPrMessage(prSubmission({ ticketLinks: ["a", "b"] })).blocks[0] as {
-      text: { text: string };
-    }
-  ).text.text;
+  const many = prBody(createPrMessage(prSubmission({ ticketLinks: ["a", "b"] })));
   assert.match(many, /\*Ticket:\* \n• a\n• b\n/);
 });
 
 test("falls back to - when no ticket was given", () => {
-  const body = (
-    createPrMessage(prSubmission({ ticketLinks: [] })).blocks[0] as {
-      text: { text: string };
-    }
-  ).text.text;
+  const body = prBody(createPrMessage(prSubmission({ ticketLinks: [] })));
 
   assert.match(body, /\*Ticket:\* -/);
 });
 
 test("escapes ticket text so it cannot forge mentions or links", () => {
-  const body = (
+  const body = prBody(
     createPrMessage(
       prSubmission({ ticketLinks: ["<@U999> <https://evil.com|click> & more"] }),
-    ).blocks[0] as { text: { text: string } }
-  ).text.text;
+    ),
+  );
 
   assert.ok(!body.includes("<@U999>"), "raw mention must not survive");
   assert.ok(!body.includes("<https://evil.com|click>"), "raw link must not survive");
@@ -89,8 +100,7 @@ test("escapes ticket text so it cannot forge mentions or links", () => {
 });
 
 test("handles no reviewers without producing an empty field", () => {
-  const { blocks } = createPrMessage(prSubmission({ reviewerUserIds: [] }));
-  const body = (blocks[0] as { text: { text: string } }).text.text;
+  const body = prBody(createPrMessage(prSubmission({ reviewerUserIds: [] })));
 
   assert.match(body, /\*Reviewer:\* -/);
 });
@@ -99,11 +109,7 @@ const TOOLING_URL =
   "https://toolings.co/company/2/projects/387?bust=undefined&memberIds=213&selectedTicketId=113263";
 
 function ticketText(ticketLinks: string[]) {
-  return (
-    createPrMessage(prSubmission({ ticketLinks })).blocks[0] as {
-      text: { text: string };
-    }
-  ).text.text;
+  return prBody(createPrMessage(prSubmission({ ticketLinks })));
 }
 
 test("turns [label](url) into a Slack hyperlink", () => {
@@ -168,8 +174,10 @@ type OverflowBlock = {
 };
 
 function prActions(watcherUserIds: string[]) {
-  return createPrMessage(prSubmission({ watcherUserIds }))
-    .blocks[1] as OverflowBlock;
+  return blockOfType(
+    createPrMessage(prSubmission({ watcherUserIds })),
+    "actions",
+  ) as unknown as OverflowBlock;
 }
 
 function prMergedButton(watcherUserIds: string[]) {
@@ -203,10 +211,11 @@ test("keeps Merged as a button and puts Delete in the overflow", () => {
 });
 
 test("never mentions watchers in the posted message", () => {
-  const { text, blocks } = createPrMessage(
+  const message = createPrMessage(
     prSubmission({ watcherUserIds: ["U_WATCH1", "U_WATCH2"] }),
   );
-  const body = (blocks[0] as { text: { text: string } }).text.text;
+  const { text } = message;
+  const body = prBody(message);
 
   assert.ok(!body.includes("U_WATCH1"), "watcher must not appear in the body");
   assert.ok(!body.includes("U_WATCH2"), "watcher must not appear in the body");
@@ -352,7 +361,10 @@ test("leaves a merged marker naming who merged it", () => {
 });
 
 test("keeps the original PR details visible after merging", () => {
-  const body = (mergedBlocks()[0] as unknown as { text: { text: string } }).text.text;
+  const body =
+    (mergedBlocks().find((block) => block.type === "section") as unknown as {
+      text: { text: string };
+    }).text.text;
 
   assert.match(body, /\*Owner PR:\* <@U1>/);
   assert.match(body, /\*PR:\* https:\/\/github\.com\/org\/repo\/pull\/7/);
@@ -457,4 +469,67 @@ test("keeps the existing issue details untouched", () => {
   assert.match(body, /\*Owner issue:\* <@U_OWNER>/);
   assert.match(body, /\*Problem:\* build พัง/);
   assert.match(body, /\*Ask:\* <@U_ASK>/);
+});
+
+test("every priority fits Slack's 75 char option limits", () => {
+  for (const priority of PR_PRIORITIES) {
+    const label = `${priority.emoji} *${priority.label}* · ${priority.note}`;
+
+    assert.ok(label.length <= 75, `${priority.value} label is ${label.length} chars`);
+    assert.ok(
+      priority.sla.length <= 75,
+      `${priority.value} description is ${priority.sla.length} chars`,
+    );
+  }
+});
+
+test("parses each known priority and falls back for anything else", () => {
+  for (const priority of PR_PRIORITIES) {
+    assert.equal(parsePrPriority(priority.value), priority.value);
+  }
+
+  for (const unknown of [undefined, "", "blocker", "NORMAL"]) {
+    assert.equal(parsePrPriority(unknown), DEFAULT_PR_PRIORITY);
+  }
+});
+
+test("shows the priority in a header block so it reads at a glance", () => {
+  const header = blockOfType(
+    createPrMessage(prSubmission({ priority: "critical" })),
+    "header",
+  );
+
+  assert.equal(header?.block_id, "pr_priority");
+  assert.equal(header?.text?.text, ":red_circle: Critical");
+});
+
+test("puts the review deadline above the PR details", () => {
+  const body = prBody(createPrMessage(prSubmission({ priority: "urgent" })));
+
+  assert.match(body, /^_Review as soon as possible_\n\*Owner PR:\*/);
+});
+
+test("labels each level with its own colour and deadline", () => {
+  for (const priority of PR_PRIORITIES) {
+    const message = createPrMessage(prSubmission({ priority: priority.value }));
+
+    assert.equal(
+      blockOfType(message, "header")?.text?.text,
+      `${priority.emoji} ${priority.label}`,
+    );
+    assert.match(prBody(message), new RegExp(`^_${priority.sla}_`));
+  }
+});
+
+test("carries the priority into the notification fallback text", () => {
+  assert.match(
+    createPrMessage(prSubmission({ priority: "critical" })).text,
+    /^\[Critical\] ขอรีวิว PR:/,
+  );
+});
+
+test("keeps the priority header after a merge", () => {
+  const header = mergedBlocks().find((block) => block.block_id === "pr_priority");
+
+  assert.ok(header, "merging must not strip the priority");
 });

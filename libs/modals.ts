@@ -3,6 +3,18 @@ import type {
   SlackModal,
   SlackModalMetadata,
 } from "@/models/slack-api";
+import { DEFAULT_PR_PRIORITY, PR_PRIORITIES } from "@/libs/messages";
+
+function priorityOption(priority: (typeof PR_PRIORITIES)[number]) {
+  return {
+    text: {
+      type: "mrkdwn",
+      text: `${priority.emoji} *${priority.label}* · ${priority.note}`,
+    },
+    description: { type: "plain_text", text: priority.sla },
+    value: priority.value,
+  };
+}
 
 export function createIssueModal(metadata: SlackModalMetadata): SlackModal {
   return {
@@ -169,6 +181,21 @@ export function createPrModal(metadata: SlackModalMetadata): SlackModal {
             type: "plain_text",
             text: "เช่น https://github.com/org/repo/pull/123",
           },
+        },
+      },
+      {
+        type: "input",
+        block_id: "priority",
+        label: { type: "plain_text", text: "Priority" },
+        element: {
+          type: "radio_buttons",
+          action_id: "priority_select",
+          initial_option: priorityOption(
+            PR_PRIORITIES.find(
+              (priority) => priority.value === DEFAULT_PR_PRIORITY,
+            ) ?? PR_PRIORITIES[0],
+          ),
+          options: PR_PRIORITIES.map(priorityOption),
         },
       },
       {
