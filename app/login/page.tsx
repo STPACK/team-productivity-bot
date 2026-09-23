@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { LoginCard } from "@/components/login-card";
+import { LoginCard } from "@/components/LoginCard";
 import { getSessionUser } from "@/libs/auth/session";
 
 function safeNextPath(value: string | string[] | undefined) {

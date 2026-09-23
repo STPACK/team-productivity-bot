@@ -1,5 +1,5 @@
-import { ChannelDashboard } from "@/components/channel-dashboard";
-import { DashboardUser } from "@/components/dashboard-user";
+import { ChannelDashboard } from "@/components/ChannelDashboard";
+import { DashboardUser } from "@/components/DashboardUser";
 import { requireSessionUser } from "@/libs/auth/session";
 
 export default async function ChannelPage({

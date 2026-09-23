@@ -1,3 +1,5 @@
+"use client";
+
 import { DailyCalendar } from "./DailyCalendar";
 import { withDailyCalendar } from "./withDailyCalendar";
 

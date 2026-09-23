@@ -61,7 +61,12 @@ export interface AccordionProps {
 
 **index** — `index.ts`
 
+`"use client"` is required here: the file calls the HOC at module scope, and a
+server component importing it cannot invoke a function that lives on the client.
+
 ```ts
+"use client";
+
 import { Accordion } from "./Accordion";
 import { withAccordion } from "./withAccordion";
 

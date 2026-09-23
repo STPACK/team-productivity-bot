@@ -177,3 +177,29 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.daily-calendar .daily-cell-over {
+  border-left-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.12);
+}
+
+.daily-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 32px;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.daily-summary-target {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.daily-summary-label {
+  font-size: 14px;
+  opacity: 0.65;
+}

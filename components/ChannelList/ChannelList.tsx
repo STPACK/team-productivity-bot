@@ -1,12 +1,13 @@
 "use client";
 
+import React from "react";
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
 import { Alert, Card, Empty, Table, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { DateTime } from "luxon";
-import { getChannels } from "@/libs/api/dashboard";
+
 import type { ChannelSummary } from "@/models/dashboard";
+import type { ChannelListProps } from "./interface";
 
 function formatDateTime(value: string | null) {
   if (!value) {
@@ -51,30 +52,33 @@ const columns: ColumnsType<ChannelSummary> = [
   },
 ];
 
-export function ChannelList() {
-  const query = useQuery({
-    queryKey: ["channels"],
-    queryFn: getChannels,
-  });
-
-  if (query.isError) {
+export function ChannelList({
+  className,
+  channels,
+  isPending,
+  error,
+}: ChannelListProps) {
+  if (error) {
     return (
       <Alert
         type="error"
         showIcon
         title="โหลดรายการ Channel ไม่สำเร็จ"
-        description={query.error.message}
+        description={error}
       />
     );
   }
 
   return (
-    <Card className="dashboard-card" styles={{ body: { padding: 0 } }}>
+    <Card
+      className={className ?? "dashboard-card"}
+      styles={{ body: { padding: 0 } }}
+    >
       <Table
         rowKey="channelId"
         columns={columns}
-        dataSource={query.data ?? []}
-        loading={query.isPending}
+        dataSource={channels}
+        loading={isPending}
         pagination={{ pageSize: 20, showSizeChanger: false }}
         locale={{ emptyText: <Empty description="ยังไม่มีข้อมูล Channel" /> }}
         scroll={{ x: 720 }}

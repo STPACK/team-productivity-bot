@@ -1,17 +1,14 @@
 "use client";
 
+import React from "react";
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
 import { Alert, Card, Empty, Table, Tabs, Tag } from "antd";
-import { DailyCalendar } from "@/components/DailyCalendar";
 import type { ColumnsType } from "antd/es/table";
 import { DateTime } from "luxon";
-import {
-  getChannel,
-  getDailyRecords,
-  getIssueRecords,
-} from "@/libs/api/dashboard";
+import { DailyCalendar } from "@/components/DailyCalendar";
 import type { DashboardMember, IssueRecord } from "@/models/dashboard";
+
+import type { ChannelDashboardProps } from "./interface";
 
 function formatDateTime(value: string | null, timezone = "Asia/Bangkok") {
   if (!value) {
@@ -114,21 +111,15 @@ function QueryError({ message }: { message: string }) {
   );
 }
 
-export function ChannelDashboard({ channelId }: { channelId: string }) {
-  const channelQuery = useQuery({
-    queryKey: ["channel", channelId],
-    queryFn: () => getChannel(channelId),
-  });
-  const dailyCountQuery = useQuery({
-    queryKey: ["daily", channelId],
-    queryFn: () => getDailyRecords(channelId),
-  });
-  const issueQuery = useQuery({
-    queryKey: ["issues", channelId],
-    queryFn: () => getIssueRecords(channelId),
-  });
-  const channelLabel = channelQuery.data?.channelName || channelId;
-
+export function ChannelDashboard({
+  channelId,
+  channelLabel,
+  channelError,
+  dailyCount,
+  issues,
+  issuesPending,
+  issuesError,
+}: ChannelDashboardProps) {
   return (
     <main className="dashboard-shell">
       <Link className="back-link" href="/">
@@ -140,8 +131,8 @@ export function ChannelDashboard({ channelId }: { channelId: string }) {
         <p className="dashboard-description">{channelId}</p>
       </header>
 
-      {channelQuery.isError ? (
-        <QueryError message={channelQuery.error.message} />
+      {channelError ? (
+        <QueryError message={channelError} />
       ) : (
         <Card className="dashboard-card">
           <Tabs
@@ -149,20 +140,20 @@ export function ChannelDashboard({ channelId }: { channelId: string }) {
             items={[
               {
                 key: "daily",
-                label: `Daily (${dailyCountQuery.data?.length ?? 0})`,
+                label: `Daily (${dailyCount})`,
                 children: <DailyCalendar channelId={channelId} />,
               },
               {
                 key: "issues",
-                label: `Issue (${issueQuery.data?.length ?? 0})`,
-                children: issueQuery.isError ? (
-                  <QueryError message={issueQuery.error.message} />
+                label: `Issue (${issues.length})`,
+                children: issuesError ? (
+                  <QueryError message={issuesError} />
                 ) : (
                   <Table
                     rowKey="id"
                     columns={issueColumns}
-                    dataSource={issueQuery.data ?? []}
-                    loading={issueQuery.isPending}
+                    dataSource={issues}
+                    loading={issuesPending}
                     pagination={{ pageSize: 20, showSizeChanger: false }}
                     locale={{ emptyText: <Empty description="ยังไม่มี Issue" /> }}
                     scroll={{ x: 1600 }}
