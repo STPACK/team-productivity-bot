@@ -9,9 +9,8 @@ function priorityOption(priority: (typeof PR_PRIORITIES)[number]) {
   return {
     text: {
       type: "mrkdwn",
-      text: `${priority.emoji} *${priority.label}* · ${priority.note}`,
+      text: `${priority.emoji} *${priority.label}* · ${priority.sla} ${priority.note} `,
     },
-    description: { type: "plain_text", text: priority.sla },
     value: priority.value,
   };
 }

@@ -293,13 +293,8 @@ test("the Delete option carries the owner id", () => {
   assert.equal(decodeActionValue(prDeleteOption([])?.value)?.fields[0], "U1");
 });
 
-function mergedBlocks(
-  mergedBy: string | undefined = "U_MERGER",
-  priority: PrSubmission["priority"] = "normal",
-) {
-  const posted = createPrMessage(
-    prSubmission({ watcherUserIds: ["U_W1"], priority }),
-  );
+function mergedBlocks(mergedBy: string | undefined = "U_MERGER") {
+  const posted = createPrMessage(prSubmission({ watcherUserIds: ["U_W1"] }));
 
   return createPrMergedUpdate(posted, mergedBy).blocks as {
     type: string;
@@ -498,36 +493,8 @@ test("parses each known priority and falls back for anything else", () => {
   }
 });
 
-test("shows the priority in a header block so it reads at a glance", () => {
-  const header = blockOfType(
-    createPrMessage(prSubmission({ priority: "critical" })),
-    "header",
-  );
-
-  assert.equal(header?.block_id, "pr_priority");
-  assert.equal(header?.text?.text, ":red_circle: Critical");
-});
-
-test("puts the review deadline above the PR details", () => {
-  const body = prBody(createPrMessage(prSubmission({ priority: "urgent" })));
-
-  assert.match(body, /^_Review as soon as possible_\n\*Owner PR:\*/);
-});
-
-test("gives urgent levels a header and the deadline spelled out", () => {
-  for (const priority of PR_PRIORITIES.filter((level) => level.prominent)) {
-    const message = createPrMessage(prSubmission({ priority: priority.value }));
-
-    assert.equal(
-      blockOfType(message, "header")?.text?.text,
-      `${priority.emoji} ${priority.label}`,
-    );
-    assert.match(prBody(message), new RegExp(`^_${priority.sla}_`));
-  }
-});
-
-test("folds quiet levels into the existing lines instead", () => {
-  for (const priority of PR_PRIORITIES.filter((level) => !level.prominent)) {
+test("folds every level into the existing lines", () => {
+  for (const priority of PR_PRIORITIES) {
     const message = createPrMessage(prSubmission({ priority: priority.value }));
     const body = prBody(message);
 
@@ -536,7 +503,10 @@ test("folds quiet levels into the existing lines instead", () => {
       undefined,
       `${priority.value} must not add a header block`,
     );
-    assert.ok(!body.includes(priority.sla), "the English deadline is dropped");
+    assert.ok(
+      !body.includes(priority.sla),
+      "the English deadline stays in the modal only",
+    );
     // The dot leads the first line and the label closes the reviewer line.
     assert.match(body, new RegExp(`^${priority.emoji} \\*Owner PR:\\*`));
     assert.match(
@@ -546,10 +516,25 @@ test("folds quiet levels into the existing lines instead", () => {
   }
 });
 
-test("keeps a quiet request to four lines", () => {
-  const body = prBody(createPrMessage(prSubmission({ priority: "normal" })));
+test("keeps every request to four lines whatever its urgency", () => {
+  for (const priority of PR_PRIORITIES) {
+    const body = prBody(createPrMessage(prSubmission({ priority: priority.value })));
 
-  assert.equal(body.trimEnd().split("\n").length, 4);
+    assert.equal(
+      body.trimEnd().split("\n").length,
+      4,
+      `${priority.value} should still render four lines`,
+    );
+  }
+});
+
+test("adds no block beyond the details and the actions", () => {
+  const message = createPrMessage(prSubmission({ priority: "critical" }));
+
+  assert.deepEqual(
+    message.blocks.map((block) => (block as AnyBlock).type),
+    ["section", "actions"],
+  );
 });
 
 test("carries the priority into the notification fallback text", () => {
@@ -559,10 +544,3 @@ test("carries the priority into the notification fallback text", () => {
   );
 });
 
-test("keeps the priority header after a merge", () => {
-  const header = mergedBlocks("U_MERGER", "critical").find(
-    (block) => block.block_id === "pr_priority",
-  );
-
-  assert.ok(header, "merging must not strip the priority");
-});
