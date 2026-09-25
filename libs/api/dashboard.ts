@@ -4,8 +4,8 @@ import type {
   IssueRecord,
 } from "@/models/dashboard";
 
-async function getJson<T>(url: string): Promise<T> {
-  const response = await fetch(url);
+async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(url, init);
 
   if (response.status === 401 && typeof window !== "undefined") {
     const next = `${window.location.pathname}${window.location.search}`;
@@ -23,17 +23,17 @@ async function getJson<T>(url: string): Promise<T> {
     throw new Error(result?.error ?? "Unable to load data");
   }
 
-  return response.json() as Promise<T>;
+  return (response.status === 204 ? undefined : response.json()) as Promise<T>;
 }
 
 export async function getChannels() {
-  const result = await getJson<{ channels: ChannelSummary[] }>("/api/channels");
+  const result = await requestJson<{ channels: ChannelSummary[] }>("/api/channels");
 
   return result.channels;
 }
 
 export async function getChannel(channelId: string) {
-  const result = await getJson<{ channel: ChannelSummary }>(
+  const result = await requestJson<{ channel: ChannelSummary }>(
     `/api/channels/${encodeURIComponent(channelId)}`,
   );
 
@@ -41,15 +41,37 @@ export async function getChannel(channelId: string) {
 }
 
 export async function getDailyRecords(channelId: string) {
-  const result = await getJson<{ daily: DailyRecord[] }>(
+  const result = await requestJson<{ daily: DailyRecord[] }>(
     `/api/channels/${encodeURIComponent(channelId)}/daily`,
   );
 
   return result.daily;
 }
 
+export async function saveDailyRecord(
+  channelId: string,
+  date: string,
+  time: { startTime: string; endTime: string },
+) {
+  await requestJson<void>(
+    `/api/channels/${encodeURIComponent(channelId)}/daily/${encodeURIComponent(date)}`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(time),
+    },
+  );
+}
+
+export async function deleteDailyRecord(channelId: string, date: string) {
+  await requestJson<void>(
+    `/api/channels/${encodeURIComponent(channelId)}/daily/${encodeURIComponent(date)}`,
+    { method: "DELETE" },
+  );
+}
+
 export async function getIssueRecords(channelId: string) {
-  const result = await getJson<{ issues: IssueRecord[] }>(
+  const result = await requestJson<{ issues: IssueRecord[] }>(
     `/api/channels/${encodeURIComponent(channelId)}/issues`,
   );
 

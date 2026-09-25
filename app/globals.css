@@ -153,6 +153,14 @@ body {
   }
 }
 
+.daily-cell-actions {
+  display: flex;
+  width: 100%;
+  justify-content: flex-end;
+  margin-top: 4px;
+  margin-left: auto;
+}
+
 .daily-calendar .daily-cell {
   display: flex;
   flex-direction: column;
@@ -188,9 +196,9 @@ body {
   flex-wrap: wrap;
   align-items: flex-end;
   gap: 32px;
-  margin-top: 20px;
-  padding-top: 20px;
-  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  margin-bottom: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
 }
 
 .daily-summary-target {

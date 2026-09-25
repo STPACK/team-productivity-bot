@@ -223,6 +223,45 @@ export async function saveDailySubmission(submission: DailySubmission) {
   await batch.commit();
 }
 
+// Dashboard edits only touch the time fields so the Slack submitter stays on the
+// record; a date entered from the dashboard is attributed to the session user.
+export async function saveDashboardDailyTime(
+  channelId: string,
+  date: string,
+  time: Pick<DailyRecord, "startTime" | "endTime" | "durationMinutes">,
+  editorName: string,
+) {
+  const record = getChannelDocument(channelId)
+    .collection("dailySubmissions")
+    .doc(date);
+
+  await getDatabase().runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(record);
+
+    transaction.set(
+      record,
+      snapshot.exists
+        ? time
+        : {
+            ...time,
+            userId: null,
+            userName: editorName,
+            date,
+            timezone: process.env.SLACK_TIMEZONE ?? "Asia/Bangkok",
+            submittedAt: FieldValue.serverTimestamp(),
+          },
+      { merge: true },
+    );
+  });
+}
+
+export async function deleteDailySubmission(channelId: string, date: string) {
+  await getChannelDocument(channelId)
+    .collection("dailySubmissions")
+    .doc(date)
+    .delete();
+}
+
 // Firestore mints document ids locally, so the Slack message can carry the row id
 // in its Delete button without waiting for the write to land.
 export function newIssueSubmissionId(channelId: string) {
